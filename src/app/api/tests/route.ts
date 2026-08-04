@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { connectDB } from '@/lib/mongodb';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import Test from '@/models/Test';
+import Admin from '@/models/Admin';
+void Admin;
 
 const createTestSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200),
