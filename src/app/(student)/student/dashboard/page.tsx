@@ -149,43 +149,126 @@ export default async function StudentDashboard() {
       </div>
 
       {/* Today's Test Card */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-600 to-violet-700 p-6 text-white">
+      {/* Today's Tests Card */}
+<div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-600 via-violet-600 to-indigo-700 p-5 text-white shadow-lg shadow-purple-200/50 sm:p-6">
 
-  <div className="flex items-center justify-between">
+  {/* Decorative background */}
+  <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
+  <div className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 rounded-full bg-purple-300/20 blur-3xl" />
 
-    <div>
+  <div className="relative">
 
-      <p className="text-white/80 text-sm">
-        Today's Tests
-      </p>
+    {/* Top */}
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+            <ClipboardList className="h-4 w-4 text-white" />
+          </div>
 
-      <h2 className="mt-2 text-3xl font-bold">
-        {todaysTests.length}
-      </h2>
+          <p className="text-sm font-medium text-white/80">
+            Today&apos;s Tests
+          </p>
+        </div>
 
-      <div className="mt-4 flex gap-6 text-sm">
+        <div className="flex items-end gap-2">
+          <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
+            {todaysTests.length}
+          </h2>
 
-        <span>
-          ✅ Completed : {completedToday}
-        </span>
+          <span className="mb-1 text-sm font-medium text-white/70">
+            {todaysTests.length === 1 ? "test" : "tests"} assigned
+          </span>
+        </div>
+      </div>
 
-        <span>
-          📝 Pending : {pendingTests}
-        </span>
+      {/* Desktop button */}
+      <Link
+        href="/student/test"
+        className="hidden items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-purple-700 shadow-sm transition hover:bg-purple-50 sm:flex"
+      >
+        View Tests
+        <ArrowRight className="h-4 w-4" />
+      </Link>
+    </div>
 
+    {/* Status cards */}
+    <div className="mt-6 grid grid-cols-2 gap-3">
+
+      {/* Completed */}
+      <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur-sm sm:p-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-400/20">
+            <CheckCircle2 className="h-4 w-4 text-emerald-200" />
+          </div>
+
+          <span className="text-xs font-medium text-white/70 sm:text-sm">
+            Completed
+          </span>
+        </div>
+
+        <p className="mt-3 text-2xl font-bold">
+          {completedToday}
+        </p>
+      </div>
+
+      {/* Pending */}
+      <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur-sm sm:p-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300/20">
+            <Clock className="h-4 w-4 text-amber-200" />
+          </div>
+
+          <span className="text-xs font-medium text-white/70 sm:text-sm">
+            Pending
+          </span>
+        </div>
+
+        <p className="mt-3 text-2xl font-bold">
+          {pendingTests}
+        </p>
       </div>
 
     </div>
 
+    {/* Progress */}
+    {todaysTests.length > 0 && (
+      <div className="mt-5">
+        <div className="mb-2 flex items-center justify-between text-xs">
+          <span className="font-medium text-white/70">
+            Today&apos;s progress
+          </span>
+
+          <span className="font-semibold text-white">
+            {Math.round(
+              (completedToday / todaysTests.length) * 100
+            )}%
+          </span>
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-white/15">
+          <div
+            className="h-full rounded-full bg-white transition-all duration-500"
+            style={{
+              width: `${
+                (completedToday / todaysTests.length) * 100
+              }%`,
+            }}
+          />
+        </div>
+      </div>
+    )}
+
+    {/* Mobile button */}
     <Link
       href="/student/test"
-      className="rounded-xl bg-white px-5 py-3 font-semibold text-purple-700 hover:bg-purple-50"
+      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-purple-700 shadow-sm transition active:scale-[0.98] sm:hidden"
     >
-      View Today's Tests
+      {pendingTests > 0 ? "View Today's Tests" : "View Completed Tests"}
+      <ArrowRight className="h-4 w-4" />
     </Link>
 
   </div>
-
 </div>
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-3">
