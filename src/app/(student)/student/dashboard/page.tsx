@@ -8,9 +8,12 @@ import Student from '@/models/Student';
 import Test from '@/models/Test';
 import {
   CheckCircle2, Clock, TrendingUp, Award, ClipboardList,
-  ArrowRight, Calendar, XCircle, AlertCircle
+  ArrowRight, Calendar, XCircle, AlertCircle,MapPin,
+CalendarCheck,
 } from 'lucide-react';
 import { formatDate, formatDateTime } from '@/lib/utils';
+import Attendance from "@/models/Attendance";
+import { getTodayAttendanceDate } from "@/lib/attendanceDate";
 
 export const metadata: Metadata = {
   title: 'Dashboard | DNDC Student Portal',
@@ -25,6 +28,17 @@ async function getStudentDashboardData(userId: string) {
 const tests = await Test.find();
 
   if (!student) return null;
+
+
+const attendanceDate = getTodayAttendanceDate();
+
+const todayAttendance = await Attendance.findOne({
+  studentId: userId,
+  date: attendanceDate,
+})
+  .select("checkInTime status distance")
+  .lean();
+
 
   const submissions = await Submission.find({ studentId: userId })
     .sort({ submittedAt: -1 })
@@ -91,6 +105,13 @@ const pendingTests =
   pendingTests,
 
   completedToday: todaysSubmissions.length,
+   todayAttendance: todayAttendance
+    ? {
+        checkInTime: todayAttendance.checkInTime.toISOString(),
+        status: todayAttendance.status,
+        distance: todayAttendance.distance,
+      }
+    : null,
 };
 }
 
@@ -107,6 +128,7 @@ export default async function StudentDashboard() {
   todaysTests,
   pendingTests,
   completedToday,
+  todayAttendance,
 } = data;
 
   const statCards = [
@@ -270,6 +292,104 @@ export default async function StudentDashboard() {
 
   </div>
 </div>
+
+{/* Today's Attendance */}
+
+<div
+  className={`overflow-hidden rounded-2xl border shadow-sm ${
+    todayAttendance
+      ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white"
+      : "border-orange-200 bg-gradient-to-br from-orange-50 to-white"
+  }`}
+>
+  <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+
+    {/* Left */}
+
+    <div className="flex items-start gap-4">
+
+      <div
+        className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl ${
+          todayAttendance
+            ? "bg-emerald-100"
+            : "bg-orange-100"
+        }`}
+      >
+        {todayAttendance ? (
+          <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+        ) : (
+          <MapPin className="h-6 w-6 text-orange-600" />
+        )}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Today's Attendance
+        </p>
+
+        <h2
+          className={`mt-1 text-xl font-bold ${
+            todayAttendance
+              ? "text-emerald-700"
+              : "text-slate-900"
+          }`}
+        >
+          {todayAttendance
+            ? "Present"
+            : "Not Marked"}
+        </h2>
+
+        {todayAttendance ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+
+            <span className="flex items-center gap-1.5 text-sm text-slate-500">
+              <Clock className="h-4 w-4" />
+
+              Checked in at{" "}
+              {new Date(
+                todayAttendance.checkInTime
+              ).toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Asia/Kolkata",
+              })}
+            </span>
+
+            <span className="flex items-center gap-1.5 text-sm text-slate-400">
+              <MapPin className="h-4 w-4" />
+
+              {Math.round(todayAttendance.distance)}m from DNDC
+            </span>
+
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-slate-500">
+            Mark your attendance when you reach DNDC.
+          </p>
+        )}
+      </div>
+    </div>
+
+    {/* Right */}
+
+    <Link
+      href="/student/attendance"
+      className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition sm:w-auto ${
+        todayAttendance
+          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+          : "bg-orange-500 text-white hover:bg-orange-600"
+      }`}
+    >
+      {todayAttendance
+        ? "View Attendance"
+        : "Mark Attendance"}
+
+      <ArrowRight className="h-4 w-4" />
+    </Link>
+
+  </div>
+</div>
+
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-3">
         {statCards.map((card) => {

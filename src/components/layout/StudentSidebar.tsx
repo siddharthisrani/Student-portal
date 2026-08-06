@@ -13,6 +13,9 @@ import {
   X,
   BookOpen,
   ChevronRight,
+  BarChart3,
+  CalendarCheck,
+
 } from 'lucide-react';
 
 const navItems = [
@@ -20,6 +23,11 @@ const navItems = [
   { href: '/student/test', icon: ClipboardList, label: "Today's Test" },
   { href: '/student/results', icon: History, label: 'Previous Tests' },
   { href: '/student/profile', icon: UserCircle, label: 'Profile' },
+  {
+  label: "Attendance",
+  href: "/student/attendance",
+  icon: CalendarCheck,
+},
 ];
 
 interface StudentSidebarProps {

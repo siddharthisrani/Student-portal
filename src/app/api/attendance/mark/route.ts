@@ -3,13 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getAuthUserFromRequest } from "@/lib/auth";
 import { isInsideDNDCRadius } from "@/lib/attendance";
+import { getTodayAttendanceDate } from "@/lib/attendanceDate";
 
 import Attendance from "@/models/Attendance";
 import Student from "@/models/Student";
+import WorkingDay from "@/models/WorkingDay";
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Check login
+    // ======================================================
+    // 1. AUTHENTICATION
+    // ======================================================
+
     const user = getAuthUserFromRequest(request);
 
     if (!user || user.role !== "student") {
@@ -22,58 +27,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Read student's current location
-    const body = await request.json();
-
-const latitude = Number(body.latitude);
-const longitude = Number(body.longitude);
-const accuracy = Number(body.accuracy);
-
-    if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Valid location is required.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Basic coordinate validation
-    if (
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid location coordinates.",
-        },
-        { status: 400 }
-      );
-    }
-
     await connectDB();
 
-    if (!Number.isFinite(accuracy) || accuracy > 150) {
-  return NextResponse.json(
-    {
-      success: false,
-      message:
-        "Location accuracy is too low. Please enable precise location and try again.",
-    },
-    { status: 400 }
-  );
-}
+    // ======================================================
+    // 2. FIND STUDENT
+    // ======================================================
 
-    // 3. Make sure student exists and is active
     const student = await Student.findById(user.id)
-      .select("name studentId status")
+      .select("name studentId status course batch")
       .lean();
 
     if (!student) {
@@ -96,87 +57,331 @@ const accuracy = Number(body.accuracy);
       );
     }
 
-    // 4. Check DNDC location radius
-    const locationResult = isInsideDNDCRadius(
-      latitude,
-      longitude
+    // ======================================================
+    // 3. TODAY'S ATTENDANCE DATE
+    // ======================================================
+
+    const attendanceDate = getTodayAttendanceDate();
+
+    const nextDate = new Date(attendanceDate);
+
+    nextDate.setUTCDate(
+      nextDate.getUTCDate() + 1
     );
 
-    if (!locationResult.allowed) {
+    // ======================================================
+    // 4. CHECK CALENDAR RULES
+    // ======================================================
+
+    const calendarRecords = await WorkingDay.find({
+      date: {
+        $gte: attendanceDate,
+        $lt: nextDate,
+      },
+
+      $or: [
+        {
+          course: "All",
+          batch: "All",
+        },
+
+        {
+          course: student.course,
+          batch: "All",
+        },
+
+        {
+          course: "All",
+          batch: student.batch,
+        },
+
+        {
+          course: student.course,
+          batch: student.batch,
+        },
+      ],
+    }).lean();
+
+    // ======================================================
+    // 5. FIND MOST SPECIFIC CALENDAR RULE
+    // ======================================================
+
+    const getPriority = (
+      course: string,
+      batch: string
+    ) => {
+      if (
+        course === student.course &&
+        batch === student.batch
+      ) {
+        return 4;
+      }
+
+      if (
+        course === student.course &&
+        batch === "All"
+      ) {
+        return 3;
+      }
+
+      if (
+        course === "All" &&
+        batch === student.batch
+      ) {
+        return 2;
+      }
+
+      return 1;
+    };
+
+    calendarRecords.sort(
+      (a, b) =>
+        getPriority(b.course, b.batch) -
+        getPriority(a.course, a.batch)
+    );
+
+    const calendarRule =
+      calendarRecords[0] || null;
+
+    // ======================================================
+    // 6. BLOCK HOLIDAYS
+    // ======================================================
+
+    if (calendarRule?.type === "holiday") {
       return NextResponse.json(
         {
           success: false,
-          message: `You are outside the DNDC attendance area. You are approximately ${locationResult.distance} metres away.`,
-          distance: locationResult.distance,
+          code: "HOLIDAY",
+
+          message: `${
+            calendarRule.title ||
+            "Institute Holiday"
+          } — attendance is not required today.`,
         },
         { status: 403 }
       );
     }
 
-    // 5. Use today's date as attendance date
-    const now = new Date();
+    // ======================================================
+    // 7. BLOCK NORMAL SUNDAYS
+    // ======================================================
 
-    const attendanceDate = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
+    const isSunday =
+      attendanceDate.getUTCDay() === 0;
 
-    // 6. Check existing attendance
-    const existingAttendance = await Attendance.findOne({
-      studentId: user.id,
-      date: attendanceDate,
-    }).lean();
+    /*
+      Sunday normally = OFF
+
+      But if admin created:
+      type: working_day
+
+      then attendance is allowed.
+    */
+
+    if (
+      isSunday &&
+      calendarRule?.type !== "working_day"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NON_WORKING_DAY",
+
+          message:
+            "Today is a non-working day. Attendance is not required.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ======================================================
+    // 8. CHECK IF ALREADY MARKED
+    // ======================================================
+
+    const existingAttendance =
+      await Attendance.findOne({
+        studentId: user.id,
+        date: attendanceDate,
+      }).lean();
 
     if (existingAttendance) {
       return NextResponse.json(
         {
           success: false,
           alreadyMarked: true,
-          message: "Attendance already marked for today.",
+
+          message:
+            "Attendance already marked for today.",
+
           attendance: {
-            checkInTime: existingAttendance.checkInTime,
-            status: existingAttendance.status,
+            checkInTime:
+              existingAttendance.checkInTime,
+
+            status:
+              existingAttendance.status,
           },
         },
         { status: 409 }
       );
     }
 
-    // 7. Create attendance
-    const attendance = await Attendance.create({
-      studentId: user.id,
+    // ======================================================
+    // 9. READ LOCATION
+    // ======================================================
 
-      date: attendanceDate,
+    const body = await request.json();
 
-      checkInTime: now,
+    const latitude = Number(
+      body.latitude
+    );
 
-      latitude,
-      longitude,
+    const longitude = Number(
+      body.longitude
+    );
 
-      distance: locationResult.distance,
+    const accuracy = Number(
+      body.accuracy
+    );
 
-      status: "present",
-    });
+    // ======================================================
+    // 10. VALIDATE LOCATION
+    // ======================================================
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Valid location is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Invalid location coordinates.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ======================================================
+    // 11. CHECK GPS ACCURACY
+    // ======================================================
+
+    if (
+      !Number.isFinite(accuracy) ||
+      accuracy > 150
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+
+          message:
+            "Location accuracy is too low. Please enable precise location and try again.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ======================================================
+    // 12. CHECK DNDC LOCATION RADIUS
+    // ======================================================
+
+    const locationResult =
+      isInsideDNDCRadius(
+        latitude,
+        longitude
+      );
+
+    if (!locationResult.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+
+          message: `You are outside the DNDC attendance area. You are approximately ${locationResult.distance} metres away.`,
+
+          distance:
+            locationResult.distance,
+        },
+        { status: 403 }
+      );
+    }
+
+    // ======================================================
+    // 13. CREATE ATTENDANCE
+    // ======================================================
+
+    const now = new Date();
+
+    const attendance =
+      await Attendance.create({
+        studentId: user.id,
+
+        date: attendanceDate,
+
+        checkInTime: now,
+
+        latitude,
+        longitude,
+
+        distance:
+          locationResult.distance,
+
+        status: "present",
+      });
+
+    // ======================================================
+    // SUCCESS
+    // ======================================================
 
     return NextResponse.json(
       {
         success: true,
-        message: "Attendance marked successfully.",
+
+        message:
+          "Attendance marked successfully.",
+
         attendance: {
           id: attendance._id.toString(),
-          date: attendance.date,
-          checkInTime: attendance.checkInTime,
-          status: attendance.status,
-          distance: attendance.distance,
+
+          date:
+            attendance.date,
+
+          checkInTime:
+            attendance.checkInTime,
+
+          status:
+            attendance.status,
+
+          distance:
+            attendance.distance,
         },
       },
       { status: 201 }
     );
   } catch (error: unknown) {
-    console.error("Mark attendance error:", error);
+    console.error(
+      "Mark attendance error:",
+      error
+    );
 
-    // Handles duplicate attendance if two requests happen together
+    // ======================================================
+    // DUPLICATE PROTECTION
+    // ======================================================
+
     if (
       typeof error === "object" &&
       error !== null &&
@@ -187,7 +392,9 @@ const accuracy = Number(body.accuracy);
         {
           success: false,
           alreadyMarked: true,
-          message: "Attendance already marked for today.",
+
+          message:
+            "Attendance already marked for today.",
         },
         { status: 409 }
       );
@@ -196,7 +403,9 @@ const accuracy = Number(body.accuracy);
     return NextResponse.json(
       {
         success: false,
-        message: "Unable to mark attendance. Please try again.",
+
+        message:
+          "Unable to mark attendance. Please try again.",
       },
       { status: 500 }
     );

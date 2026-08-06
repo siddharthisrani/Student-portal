@@ -23,19 +23,62 @@ type AttendanceResult = {
     status?: string;
     distance?: number;
   };
+  
 };
+
+type TodayAttendanceResponse = {
+  success: boolean;
+  marked: boolean;
+
+  attendance: {
+    id: string;
+    date: string;
+    checkInTime: string;
+    status: string;
+    distance: number;
+  } | null;
+
+  attendanceAllowed: boolean;
+
+  dayType:
+    | "working_day"
+    | "holiday"
+    | "sunday";
+
+  dayTitle: string;
+
+  message?: string;
+};
+
+
+
+import MonthlyAttendance from "@/components/student/MonthlyAttendance";
+import AttendanceNotice from "@/components/student/AttendanceNotice";
 
 export default function AttendancePage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
 
+
   const [attendance, setAttendance] =
     useState<AttendanceResult["attendance"] | null>(null);
+    const [checkingToday, setCheckingToday] = useState(true);
 
   const [permission, setPermission] = useState<
     "granted" | "denied" | "prompt" | "unknown"
   >("unknown");
+
+  const [attendanceAllowed, setAttendanceAllowed] =
+  useState(true);
+
+const [dayType, setDayType] =
+  useState<"working_day" | "holiday" | "sunday">(
+    "working_day"
+  );
+
+const [dayTitle, setDayTitle] =
+  useState("Working Day");
 
   // Check existing browser permission without asking for permission
   useEffect(() => {
@@ -60,7 +103,12 @@ export default function AttendancePage() {
     checkPermission();
   }, []);
 
+ 
+
   const markAttendance = () => {
+    if (!attendanceAllowed) {
+  return;
+}
     setMessage("");
     setError(false);
 
@@ -132,6 +180,8 @@ export default function AttendancePage() {
 
           setAttendance(data.attendance || null);
 
+
+
           setError(false);
           setMessage(
             data.message || "Attendance marked successfully."
@@ -193,8 +243,58 @@ export default function AttendancePage() {
 
   const marked = !!attendance;
 
+  useEffect(() => {
+  async function getTodayAttendance() {
+    try {
+      const response = await fetch("/api/attendance/today", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+  setAttendanceAllowed(
+    data.attendanceAllowed ?? true
+  );
+
+  setDayType(
+    data.dayType ?? "working_day"
+  );
+
+  setDayTitle(
+    data.dayTitle ?? "Working Day"
+  );
+
+  if (data.marked && data.attendance) {
+    setAttendance(data.attendance);
+  } else {
+    setAttendance(null);
+  }
+}
+
+      if (!response.ok) {
+        console.error("Today attendance error:", data);
+        return;
+      }
+
+      if (data.marked && data.attendance) {
+        setAttendance(data.attendance);
+      }
+    } catch (error) {
+      console.error("Unable to load today's attendance:", error);
+    } finally {
+      setCheckingToday(false);
+    }
+  }
+
+  getTodayAttendance();
+}, []);
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
+      
+      <AttendanceNotice />
 
       {/* Heading */}
 
@@ -237,7 +337,7 @@ export default function AttendancePage() {
             </div>
 
             <div
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+              className={`rounded-full px-3 py-1.5 text-[10px] sm:text-xs font-semibold ${
                 marked
                   ? "bg-emerald-400/20 text-emerald-100"
                   : "bg-white/15 text-white"
@@ -254,28 +354,59 @@ export default function AttendancePage() {
             </p>
           )}
 
+
+{checkingToday && (
+  <div className="mt-6 flex items-center gap-2 text-sm text-white/80">
+    <Loader2 className="h-4 w-4 animate-spin" />
+    Checking today's attendance...
+  </div>
+)}
           {/* Button */}
 
-          {!marked && (
-            <button
-              type="button"
-              onClick={markAttendance}
-              disabled={loading}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-bold text-purple-700 shadow-sm transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking Location...
-                </>
-              ) : (
-                <>
-                  <Navigation className="h-4 w-4" />
-                  Mark Attendance
-                </>
-              )}
-            </button>
-          )}
+         {/* =====================================================
+    HOLIDAY
+===================================================== */}
+
+{/* HOLIDAY - small disabled badge */}
+{!checkingToday &&
+  !marked &&
+  dayType === "holiday" && (
+    <div className="flex justify-center">
+      <span className="inline-flex mt-5 items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-700">
+        🎉 Holiday Today
+      </span>
+    </div>
+  )}
+
+
+{/* NORMAL SUNDAY - small disabled badge */}
+{!checkingToday &&
+  !marked &&
+  dayType === "sunday" && (
+    <div className="flex justify-center">
+      <span className="inline-flex mt-5 items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
+        Off Today
+      </span>
+    </div>
+  )}
+
+
+{/* WORKING DAY */}
+{!checkingToday &&
+  !marked &&
+  attendanceAllowed &&
+  dayType === "working_day" && (
+    <button
+      type="button"
+      onClick={markAttendance}
+      disabled={loading}
+      className="rounded-xl w-full ml-[0%] sm:ml-[25%] sm:!w-[50%]  mt-5 bg-white px-6 py-3 text-sm font-semibold text-purple-600 transition hover:bg-purple-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {loading
+        ? "Checking Location..."
+        : "Mark Attendance"}
+    </button>
+  )}
         </div>
 
         {/* Attendance information */}
@@ -297,6 +428,7 @@ export default function AttendancePage() {
                     ).toLocaleTimeString("en-IN", {
                       hour: "2-digit",
                       minute: "2-digit",
+                       timeZone: "Asia/Kolkata"
                     })
                   : "Marked"}
               </p>
@@ -390,6 +522,10 @@ export default function AttendancePage() {
 
         </div>
       </div>
+
+
+<MonthlyAttendance />
+
     </div>
   );
 }

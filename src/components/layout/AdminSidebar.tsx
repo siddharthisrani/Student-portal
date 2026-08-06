@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, ClipboardList, BarChart3,
-  UserCircle, LogOut, Menu, X, BookOpen, ChevronRight, Settings
+  UserCircle, LogOut, Menu, X, BookOpen, ChevronRight, Settings,CalendarCheck 
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,11 @@ const navItems = [
   { href: '/admin/tests', icon: ClipboardList, label: 'Tests' },
   { href: '/admin/results', icon: BarChart3, label: 'Results' },
   { href: '/admin/profile', icon: UserCircle, label: 'Profile' },
+  {
+  label: "Attendance",
+  href: "/admin/attendance",
+  icon: CalendarCheck,
+},
 ];
 
 interface AdminSidebarProps {
