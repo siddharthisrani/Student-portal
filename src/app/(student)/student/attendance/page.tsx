@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+
 type AttendanceResult = {
   success: boolean;
   message: string;
@@ -59,6 +60,7 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
+  const [refreshMonthly, setRefreshMonthly] = useState(0);
 
 
   const [attendance, setAttendance] =
@@ -186,6 +188,7 @@ const [dayTitle, setDayTitle] =
           setMessage(
             data.message || "Attendance marked successfully."
           );
+          setRefreshMonthly((prev) => prev + 1);
         } catch (err) {
           console.error("Attendance error:", err);
 
@@ -524,7 +527,7 @@ const [dayTitle, setDayTitle] =
       </div>
 
 
-<MonthlyAttendance />
+<MonthlyAttendance refresh={refreshMonthly} />
 
     </div>
   );

@@ -98,8 +98,12 @@ function formatCheckInTime(date: string) {
     timeZone: "Asia/Kolkata",
   });
 }
-
-export default function MonthlyAttendance() {
+type Props = {
+  refresh?: number;
+};
+export default function MonthlyAttendance({
+  refresh = 0,
+}: Props) {
   const current = getIndiaCurrentMonth();
 
   const [month, setMonth] = useState(current.month);
@@ -152,7 +156,7 @@ export default function MonthlyAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [month, year]);
+  }, [month, year,refresh]);
 
   useEffect(() => {
     fetchAttendance();
