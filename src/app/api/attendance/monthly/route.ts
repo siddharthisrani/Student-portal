@@ -307,7 +307,7 @@ export async function GET(request: NextRequest) {
     let presentDays = 0;
     let absentDays = 0;
 
-    // --------------------------------------------------
+   // --------------------------------------------------
     // Student joining date
     // --------------------------------------------------
 
@@ -321,6 +321,13 @@ export async function GET(request: NextRequest) {
       )
     );
 
+    /* 
+     * NEW: Set the official launch date for the attendance system.
+     * Month is 0-indexed in Date.UTC (7 = August).
+     * Set to August 14, 2026.
+     */
+    const SYSTEM_START_DATE = new Date(Date.UTC(2026, 7, 14));
+
     // --------------------------------------------------
     // Loop through month
     // --------------------------------------------------
@@ -332,9 +339,8 @@ export async function GET(request: NextRequest) {
     ) {
       const currentDate = new Date(current);
 
-      // Don't count dates before account/student creation
-
-      if (currentDate < joinedDay) {
+      // FIX: Skip dates before the student joined OR before the system launched
+      if (currentDate < joinedDay || currentDate < SYSTEM_START_DATE) {
         continue;
       }
 
