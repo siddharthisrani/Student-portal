@@ -20,7 +20,35 @@ interface Test {
   totalQuestions: number;
   status: 'draft' | 'published' | 'expired';
   passingMarks: number;
+  targetType:
+  | "all"
+  | "course"
+  | "batch"
+  | "students";
+batch: string;
+studentIds: string[];
 }
+
+ type TestForm = {
+  title: string;
+  description: string;
+
+  targetType: "all" | "course" | "batch" | "students";
+
+  course: string;
+
+  batch: string;
+
+  studentIds: string[];
+
+  date: string;
+
+  duration: number;
+
+  passingMarks: number;
+
+  status: "draft" | "published" | "expired";
+};
 
 const STATUS_COLORS = {
   draft: 'bg-slate-100 text-slate-600',
@@ -28,17 +56,50 @@ const STATUS_COLORS = {
   expired: 'bg-red-100 text-red-600',
 };
 
-const INITIAL_FORM = {
-  title: '', description: '', course: 'All', date: '',
-  duration: 30, passingMarks: 0, status: 'draft',
+const INITIAL_FORM: TestForm = {
+  title: "",
+  description: "",
+
+  targetType: "course",
+
+  course: "All",
+
+  batch: "All",
+
+  studentIds: [],
+
+  date: "",
+
+  duration: 30,
+
+  passingMarks: 0,
+
+  status: "draft",
 };
 
 export default function TestManager() {
   const [tests, setTests] = useState<Test[]>([]);
+  const [batches, setBatches] = useState<string[]>([]);
+
+  const [studentSearch, setStudentSearch] = useState("");
+
+const [students, setStudents] = useState<
+  {
+    _id: string;
+    name: string;
+    studentId: string;
+    batch: string;
+    course: string;
+  }[]
+>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTest, setEditingTest] = useState<Test | null>(null);
-  const [form, setForm] = useState({ ...INITIAL_FORM });
+ 
+
+const [form, setForm] = useState<TestForm>({
+  ...INITIAL_FORM,
+});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -60,6 +121,53 @@ export default function TestManager() {
     }
   }, []);
 
+  const fetchBatches = async (course: string) => {
+  if (
+    course === "All" ||
+    !course
+  ) {
+    setBatches([]);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/batches?course=${encodeURIComponent(
+        course
+      )}`
+    );
+
+    const data = await res.json();
+
+    if (data.success) {
+      setBatches(data.batches);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const fetchStudents = async (
+  course: string,
+  keyword = ""
+) => {
+  try {
+    const res = await fetch(
+      `/api/students/search?course=${encodeURIComponent(
+        course
+      )}&q=${encodeURIComponent(keyword)}`
+    );
+
+    const data = await res.json();
+
+    if (data.success) {
+      setStudents(data.students);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
   useEffect(() => { fetchTests(); }, [fetchTests]);
 
   const openCreate = () => {
@@ -75,19 +183,51 @@ export default function TestManager() {
   };
 
   const openEdit = (test: Test) => {
-    setEditingTest(test);
-    setForm({
-      title: test.title,
-      description: test.description,
-      course: test.course,
-      date: new Date(test.date).toISOString().split('T')[0],
-      duration: test.duration,
-      passingMarks: test.passingMarks,
-      status: test.status,
-    });
-    setError('');
-    setShowModal(true);
-  };
+  setEditingTest(test);
+
+  const studentIds = Array.isArray(test.studentIds)
+    ? test.studentIds.map((id: any) => id.toString())
+    : [];
+
+  setForm({
+    title: test.title,
+    description: test.description,
+
+    targetType: test.targetType,
+
+    course: test.course,
+
+    batch: test.batch,
+
+    studentIds,
+
+    date: new Date(test.date).toISOString().split("T")[0],
+
+    duration: test.duration,
+
+    passingMarks: test.passingMarks,
+
+    status: test.status,
+  });
+
+  // Load required data immediately when editing
+  if (test.targetType === "batch") {
+    fetchBatches(test.course);
+  }
+
+  if (test.targetType === "students") {
+    setStudentSearch("");
+
+    // IMPORTANT:
+    // Load all students of this course immediately.
+    // This makes previously selected students visible
+    // without clicking the search input.
+    fetchStudents(test.course, "");
+  }
+
+  setError('');
+  setShowModal(true);
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,7 +401,7 @@ export default function TestManager() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-5xl rounded-3xl bg-white shadow-2xl max-h-[92vh] overflow-hidden">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h2 className="font-bold text-slate-900 text-lg">
                 {editingTest ? 'Edit Test' : 'Create New Test'}
@@ -271,7 +411,7 @@ export default function TestManager() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[82vh] px-8 py-7 space-y-8">
               {error && <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-600">{error}</div>}
 
               <div>
@@ -289,14 +429,301 @@ export default function TestManager() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Course</label>
-                  <select value={form.course} onChange={(e) => setForm((p) => ({ ...p, course: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none">
-                    <option value="All">All Courses</option>
-                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                <div className="rounded-xl border border-slate-200 p-4 space-y-4">
+
+<h3 className="mb-3 flex items-center gap-2 text-base font-bold text-slate-900">
+Assign Test To
+</h3>
+
+<label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 hover:bg-purple-50">
+
+<input
+type="radio"
+value="all"
+checked={form.targetType==="all"}
+onChange={(e)=>
+setForm({
+...form,
+targetType: e.target.value as
+  | "all"
+  | "course"
+  | "batch"
+  | "students",
+course:"All",
+batch:"All"
+})
+}
+/>
+
+All Students
+
+</label>
+
+<label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 hover:bg-purple-50">
+
+<input
+type="radio"
+value="course"
+checked={form.targetType==="course"}
+onChange={(e)=>
+setForm({
+...form,
+targetType: e.target.value as
+  | "all"
+  | "course"
+  | "batch"
+  | "students"
+})
+}
+/>
+
+Course
+
+</label>
+
+<label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 hover:bg-purple-50">
+
+<input
+type="radio"
+value="batch"
+checked={form.targetType==="batch"}
+onChange={(e)=>
+setForm({
+...form,
+targetType: e.target.value as
+  | "all"
+  | "course"
+  | "batch"
+  | "students"
+})
+}
+/>
+
+Batch
+
+</label>
+
+<label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 hover:bg-purple-50">
+
+<input
+type="radio"
+value="students"
+checked={form.targetType==="students"}
+onChange={(e) => {
+  setStudents([]);
+  setStudentSearch("");
+
+  setForm((prev) => ({
+    ...prev,
+    targetType: "students",
+    studentIds: [],
+  }));
+
+  fetchStudents(form.course);
+}}
+/>
+
+Selected Students
+
+</label>
+
+</div>
+{form.targetType !== "all" && (
+  <div>
+    <label className="mb-1 block text-xs font-medium text-slate-700">
+      Course
+    </label>
+
+    <select
+      value={form.course}
+      onChange={(e) => {
+  const course = e.target.value;
+
+  // clear old UI
+  setStudents([]);
+  setStudentSearch("");
+
+  setForm((prev) => ({
+    ...prev,
+    course,
+    batch: "All",
+    studentIds: [],
+  }));
+
+  fetchBatches(course);
+
+  if (form.targetType === "students") {
+    fetchStudents(course);
+  }
+}}
+      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none"
+    >
+      <option value="All">All Courses</option>
+
+      {COURSES.map((course) => (
+        <option key={course} value={course}>
+          {course}
+        </option>
+      ))}
+    </select>
+  </div>
+)}
+
+{form.targetType === "batch" && (
+  <div>
+    <label className="mb-1 block text-xs font-medium text-slate-700">
+      Batch
+    </label>
+
+    <select
+      value={form.batch}
+      onChange={(e) =>
+        setForm((p) => ({
+          ...p,
+          batch: e.target.value,
+        }))
+      }
+      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+    >
+      <option value="All">All Batches</option>
+
+      {batches.map((batch) => (
+        <option
+          key={batch}
+          value={batch}
+        >
+          {batch}
+        </option>
+      ))}
+    </select>
+  </div>
+)}
+
+{form.targetType === "students" && (
+  <div className="space-y-4">
+
+    {/* Search */}
+
+    <div>
+      <label className="mb-1 block text-xs font-medium text-slate-700">
+        Search Student
+      </label>
+
+      <input
+        type="text"
+        placeholder="🔍 Search by Name or Student ID..."
+        value={studentSearch}
+        onChange={(e) => {
+          setStudentSearch(e.target.value);
+          fetchStudents(form.course, e.target.value);
+        }}
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+
+    {/* Selected Chips */}
+
+    {form.studentIds.length > 0 && (
+      <div className="rounded-2xl border border-purple-200 bg-purple-50 p-3">
+  <div className="mb-2 flex items-center justify-between">
+
+    <p className="text-sm font-semibold text-purple-700">
+      Selected Students
+    </p>
+
+    <span className="rounded-full bg-purple-600 px-2 py-0.5 text-xs text-white">
+      {form.studentIds.length}
+    </span>
+
+  </div>
+
+  <div className="flex flex-wrap gap-2">
+
+        {students
+          .filter((s) => form.studentIds.includes(s._id))
+          .map((student) => (
+            <span
+              key={student._id}
+              className="flex items-center gap-2 rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700"
+            >
+              {student.name}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    studentIds: prev.studentIds.filter(
+                      (id) => id !== student._id
+                    ),
+                  }))
+                }
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          </div>
+      </div>
+    )}
+
+    {/* Student List */}
+
+   <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-inner">
+
+      {students.length === 0 ? (
+        <p className="p-4 text-center text-sm text-slate-500">
+          No students found
+        </p>
+      ) : (
+        students.map((student) => {
+          const selected = form.studentIds.includes(student._id);
+
+          return (
+            <label
+              key={student._id}
+              className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 transition-all mb-2
+${
+  selected
+    ? "border-purple-500 bg-purple-50"
+    : "border-slate-200 hover:border-purple-300 hover:bg-slate-50"
+}`}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => {
+                  setForm((prev) => ({
+                    ...prev,
+                    studentIds: selected
+                      ? prev.studentIds.filter(
+                          (id) => id !== student._id
+                        )
+                      : [...prev.studentIds, student._id],
+                  }));
+                }}
+              />
+
+              <div className="flex-1">
+
+                <p className="font-medium text-slate-900">
+                  {student.name}
+                </p>
+
+                <p className="text-xs text-slate-500">
+                  {student.studentId} • {student.batch}
+                </p>
+
+              </div>
+
+            </label>
+          );
+        })
+      )}
+    </div>
+
+  </div>
+)}
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-700">Test Date</label>
                   <input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
@@ -318,7 +745,15 @@ export default function TestManager() {
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">Status</label>
-                <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+                <select value={form.status} onChange={(e) =>
+  setForm((p) => ({
+    ...p,
+    status: e.target.value as
+      | "draft"
+      | "published"
+      | "expired",
+  }))
+}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none">
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>

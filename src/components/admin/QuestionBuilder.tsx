@@ -6,6 +6,14 @@ import {
   Plus, Trash2, Save, ArrowLeft, GripVertical, Image, FileText,
   CheckCircle2, XCircle, AlertCircle, Upload
 } from 'lucide-react';
+import TextQuestion from "./question-builder/TextQuestion";
+import QuestionHeader  from './question-builder/QuestionHeader';
+import MarksInput from './question-builder/MarksInput';
+import MCQQuestion from "./question-builder/MCQQuestion";
+import CodingQuestion from "./question-builder/CodingQuestion";
+import SQLQuestion from "./question-builder/SQLQuestion";
+import ExcelQuestion from "./question-builder/ExcelQuestion";
+import UploadQuestion from "./question-builder/UploadQuestion";
 
 interface Option {
   id: string;
@@ -13,15 +21,69 @@ interface Option {
 }
 
 interface Question {
+
   _id?: string;
-  type: 'mcq' | 'image_mcq' | 'pdf_mcq' | 'text';
+
+  type:
+    | "mcq"
+    | "image_mcq"
+    | "pdf_mcq"
+    | "text"
+    | "coding"
+    | "sql"
+    | "excel"
+    | "upload";
+
   question: string;
+
   options: Option[];
+
   correctAnswer: string;
+
   marks: number;
+
   imageUrl?: string;
+
   pdfUrl?: string;
+
   order: number;
+
+  // --------------------
+  // Coding
+  // --------------------
+
+language?: string;
+starterCode?: string;
+sampleInput?: string;
+sampleOutput?: string;
+
+// Future use (optional)
+boilerplateCode?: string;
+
+  // --------------------
+  // SQL
+  // --------------------
+
+   tableName?: string;
+  dataFileUrl?: string;
+  dataFileName?: string;
+  dataFileType?: string;
+
+  // --------------------
+  // Excel
+  // --------------------
+
+  excelTemplate?: string;
+
+  // --------------------
+  // Upload
+  // --------------------
+
+  allowedExtensions?: string[];
+
+  maxFileSize?: number;
+
+
 }
 
 interface QuestionBuilderProps {
@@ -31,17 +93,50 @@ interface QuestionBuilderProps {
 const generateId = () => Math.random().toString(36).substring(2, 8);
 
 const createBlankQuestion = (order: number): Question => ({
-  type: 'mcq',
-  question: '',
-  options: [
-    { id: generateId(), text: '' },
-    { id: generateId(), text: '' },
-    { id: generateId(), text: '' },
-    { id: generateId(), text: '' },
-  ],
-  correctAnswer: '',
+  type: "mcq",
+ 
+  // Common
+  question: "",
   marks: 1,
   order,
+
+  // MCQ
+  options: [
+    { id: generateId(), text: "" },
+    { id: generateId(), text: "" },
+    { id: generateId(), text: "" },
+    { id: generateId(), text: "" },
+  ],
+  correctAnswer: "",
+
+  // Media
+  imageUrl: "",
+  pdfUrl: "",
+
+  // Coding
+language: "javascript",
+
+starterCode: "",
+
+sampleInput: "",
+
+sampleOutput: "",
+
+boilerplateCode: "",
+
+  // SQL
+tableName: "",
+dataFileUrl: "",
+dataFileName: "",
+dataFileType: "",
+
+
+  // Excel
+  excelTemplate: "",
+
+  // Upload Question
+  allowedExtensions: [],
+  maxFileSize: 10, // MB
 });
 
 export default function QuestionBuilder({ testId }: QuestionBuilderProps) {
@@ -134,38 +229,210 @@ export default function QuestionBuilder({ testId }: QuestionBuilderProps) {
     }
   };
 
+ const handleDatasetUpload = async (
+  qIndex: number,
+  file: File
+) => {
+  const key = `${qIndex}-dataset`;
+
+  setUploadingFor(key);
+
+  try {
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    const res = await fetch(
+      "/api/upload/dataset",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(
+        data.message ||
+          "Dataset upload failed"
+      );
+    }
+
+    updateQuestion(qIndex, {
+      dataFileUrl: data.url,
+      dataFileName: data.fileName,
+      dataFileType: data.fileType,
+    });
+  } catch (error) {
+    console.error(
+      "Dataset upload error:",
+      error
+    );
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Dataset upload failed"
+    );
+  } finally {
+    setUploadingFor(null);
+  }
+};
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
 
-    // Validate
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      if (!q.question.trim()) {
-        setError(`Question ${i + 1}: Question text is required.`);
-        setSaving(false);
-        return;
-      }
-      if (!q.correctAnswer) {
-        setError(`Question ${i + 1}: Please select the correct answer.`);
-        setSaving(false);
-        return;
-      }
-      for (const opt of q.options) {
-        if (!opt.text.trim()) {
-          setError(`Question ${i + 1}: All option texts are required.`);
-          setSaving(false);
-          return;
-        }
-      }
+// VALIDATION
+// =========================
+
+for (let i = 0; i < questions.length; i++) {
+
+  const q = questions[i];
+
+  if (!q.question.trim()) {
+    setError(
+      `Question ${i + 1}: Question text is required.`
+    );
+    setSaving(false);
+    return;
+  }
+
+ 
+
+  // -------------------------
+  // MCQ Validation
+  // -------------------------
+
+  if (
+    q.type === "mcq" ||
+    q.type === "image_mcq" ||
+    q.type === "pdf_mcq"
+  ) {
+
+    if (!q.correctAnswer) {
+      setError(
+        `Question ${i + 1}: Please select the correct answer.`
+      );
+
+      setSaving(false);
+      return;
     }
 
+    for (const option of q.options) {
+
+      if (!option.text.trim()) {
+
+        setError(
+          `Question ${i + 1}: Every option must contain text.`
+        );
+
+        setSaving(false);
+        return;
+
+      }
+
+    }
+
+  }
+
+  // -------------------------
+  // Coding Validation
+  // -------------------------
+
+  if (q.type === "coding") {
+
+    if (!q.language) {
+
+      setError(
+        `Question ${i + 1}: Select a programming language.`
+      );
+
+      setSaving(false);
+      return;
+
+    }
+
+    if (!q.starterCode?.trim()) {
+
+      setError(
+        `Question ${i + 1}: Starter code is required.`
+      );
+
+      setSaving(false);
+      return;
+
+    }
+
+  }
+
+  // -------------------------
+  // SQL
+  // -------------------------
+
+  // -------------------------
+// SQL Validation
+// -------------------------
+
+// -------------------------
+// SQL Validation
+// -------------------------
+
+if (q.type === "sql") {
+  // Dataset is optional.
+  // Admin will manually review the student's SQL query.
+}
+
+}
+
+  
+
+
+
     try {
-      const res = await fetch('/api/questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testId, questions }),
-      });
+      console.log(
+  JSON.stringify(
+    questions,
+    null,
+    2
+  )
+);
+
+     const cleanedQuestions = questions.map((q) => ({
+  ...q,
+
+  options:
+    q.type === "mcq" ||
+    q.type === "image_mcq" ||
+    q.type === "pdf_mcq"
+      ? q.options
+      : [],
+
+  correctAnswer:
+    q.type === "mcq" ||
+    q.type === "image_mcq" ||
+    q.type === "pdf_mcq"
+      ? q.correctAnswer
+      : "",
+}));
+const res = await fetch("/api/questions", {
+
+  method: "POST",
+
+  headers: {
+    "Content-Type": "application/json",
+  },
+
+  body: JSON.stringify({
+
+    testId,
+
+    questions: cleanedQuestions,
+
+  }),
+
+});
 
       const data = await res.json();
       if (!res.ok) {
@@ -227,79 +494,135 @@ export default function QuestionBuilder({ testId }: QuestionBuilderProps) {
         )}
 
         {questions.map((q, qIndex) => (
-          <div key={qIndex} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div key={qIndex} className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-purple-200 hover:shadow-xl">
             {/* Question Header */}
-            <div className="flex items-center gap-3 p-4 border-b border-slate-100">
-              <GripVertical className="h-4 w-4 text-slate-300" />
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700">
-                {qIndex + 1}
-              </div>
-              <select
-                value={q.type}
-                onChange={(e) => updateQuestion(qIndex, { type: e.target.value as Question['type'] })}
-                className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 focus:outline-none focus:border-purple-400"
-              >
-                <option value="mcq">MCQ</option>
-                <option value="image_mcq">MCQ with Image</option>
-                <option value="pdf_mcq">MCQ with PDF</option>
-                <option value="text">Text Question</option>
-              </select>
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  onClick={() => duplicateQuestion(qIndex)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 text-xs"
-                  title="Duplicate"
-                >
-                  ⎘
-                </button>
-                <button
-                  onClick={() => removeQuestion(qIndex)}
-                  disabled={questions.length === 1}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-30 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <QuestionHeader
+
+index={qIndex}
+
+type={q.type}
+
+canDelete={questions.length>1}
+
+onTypeChange={(type) => {
+
+  const newType = type as Question["type"];
+
+  updateQuestion(qIndex, {
+
+    type: newType,
+
+    options:
+      newType === "mcq" ||
+      newType === "image_mcq" ||
+      newType === "pdf_mcq"
+        ? [
+            { id: generateId(), text: "" },
+            { id: generateId(), text: "" },
+            { id: generateId(), text: "" },
+            { id: generateId(), text: "" },
+          ]
+        : [],
+
+    correctAnswer: "",
+
+    imageUrl: "",
+    pdfUrl: "",
+
+    language: "javascript",
+
+    starterCode: "",
+
+    sampleInput: "",
+
+    sampleOutput: "",
+
+    tableName: "",
+dataFileUrl: "",
+dataFileName: "",
+dataFileType: "",
+
+excelTemplate: "",
+
+    allowedExtensions: [],
+
+    maxFileSize: 10,
+
+  });
+
+}}
+
+onDuplicate={()=>duplicateQuestion(qIndex)}
+
+onDelete={()=>removeQuestion(qIndex)}
+
+/>
 
             <div className="p-4 space-y-4">
               {/* Image Upload */}
-              {(q.type === 'image_mcq') && (
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">Question Image</label>
-                  {q.imageUrl ? (
-                    <div className="relative">
-                      <img src={q.imageUrl} alt="question" className="h-32 rounded-xl object-contain border border-slate-200" />
-                      <button
-                        onClick={() => updateQuestion(qIndex, { imageUrl: undefined })}
-                        className="absolute top-1 right-1 rounded-full bg-red-500 p-1 text-white"
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-5 cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
-                      {uploadingFor === `${qIndex}-image` ? (
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-                      ) : (
-                        <>
-                          <Image className="h-6 w-6 text-slate-400" />
-                          <span className="text-xs text-slate-500">Click to upload image (JPG, PNG, WebP)</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleFileUpload(qIndex, file, 'image');
-                            }}
-                          />
-                        </>
-                      )}
-                    </label>
-                  )}
-                </div>
-              )}
+      {/* Image Upload */}
+{q.type === "image_mcq" && (
+  <div>
+    <label className="mb-1.5 block text-xs font-medium text-slate-600">
+      Reference Image
+    </label>
+
+    {q.imageUrl ? (
+      <div className="relative overflow-hidden rounded-xl border border-slate-200">
+        <img
+          src={q.imageUrl}
+          alt="Question"
+          className="max-h-60 w-full object-contain bg-slate-50"
+        />
+
+        <button
+          type="button"
+          onClick={() =>
+            updateQuestion(qIndex, {
+              imageUrl: undefined,
+            })
+          }
+          className="absolute right-2 top-2 rounded-full bg-white p-1 shadow hover:bg-red-50"
+        >
+          <XCircle className="h-5 w-5 text-red-500" />
+        </button>
+      </div>
+    ) : (
+      <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-5 transition-all hover:border-purple-400 hover:bg-purple-50">
+
+        {uploadingFor === `${qIndex}-image` ? (
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+        ) : (
+          <>
+            <Image className="h-6 w-6 text-slate-400" />
+
+            <span className="text-xs text-slate-500">
+              Click to upload image
+            </span>
+
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+
+                if (file) {
+                  handleFileUpload(
+                    qIndex,
+                    file,
+                    "image"
+                  );
+                }
+              }}
+            />
+          </>
+        )}
+
+      </label>
+    )}
+  </div>
+)}
 
               {/* PDF Upload */}
               {q.type === 'pdf_mcq' && (
@@ -340,85 +663,135 @@ export default function QuestionBuilder({ testId }: QuestionBuilderProps) {
               )}
 
               {/* Question Text */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-600">Question Text</label>
-                <textarea
-                  value={q.question}
-                  onChange={(e) => updateQuestion(qIndex, { question: e.target.value })}
-                  placeholder="Enter your question here..."
-                  rows={2}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none"
-                />
-              </div>
+              {/* Question Text */}
+<TextQuestion
+  value={q.question}
+  onChange={(question) =>
+    updateQuestion(qIndex, {
+      question,
+    })
+  }
+/>
 
-              {/* Options */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-slate-600">Answer Options</label>
-                  {q.options.length < 6 && (
-                    <button
-                      onClick={() => addOption(qIndex)}
-                      className="text-xs text-purple-600 hover:text-purple-700 font-medium"
-                    >
-                      + Add Option
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {q.options.map((opt, optIndex) => (
-                    <div key={opt.id} className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQuestion(qIndex, { correctAnswer: opt.id })}
-                        className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-xs font-bold border-2 transition-all ${
-                          q.correctAnswer === opt.id
-                            ? 'bg-emerald-500 border-emerald-500 text-white'
-                            : 'bg-white border-slate-200 text-slate-500 hover:border-emerald-400'
-                        }`}
-                        title="Set as correct answer"
-                      >
-                        {labels[optIndex]}
-                      </button>
-                      <input
-                        type="text"
-                        value={opt.text}
-                        onChange={(e) => updateOption(qIndex, opt.id, e.target.value)}
-                        placeholder={`Option ${labels[optIndex]}`}
-                        className={`flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                          q.correctAnswer === opt.id
-                            ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-400/20'
-                            : 'border-slate-200 focus:border-purple-400 focus:ring-purple-400/20'
-                        }`}
-                      />
-                      {q.options.length > 2 && (
-                        <button
-                          onClick={() => removeOption(qIndex, opt.id)}
-                          className="text-slate-300 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {!q.correctAnswer && (
-                  <p className="text-xs text-amber-600 mt-1.5">
-                    Click a letter (A, B, C, D) to mark it as the correct answer.
-                  </p>
-                )}
-              </div>
+{/* Question Type UI */}
+
+{(q.type === "mcq" ||
+  q.type === "image_mcq" ||
+  q.type === "pdf_mcq") && (
+  <>
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <label className="text-xs font-medium text-slate-600">
+          Answer Options
+        </label>
+
+        {q.options.length < 6 && (
+          <button
+            onClick={() => addOption(qIndex)}
+            className="text-xs font-medium text-purple-600 hover:text-purple-700"
+          >
+            + Add Option
+          </button>
+        )}
+      </div>
+
+      <MCQQuestion
+        options={q.options}
+        labels={labels}
+        correctAnswer={q.correctAnswer}
+        onOptionChange={(optionId, value) =>
+          updateOption(qIndex, optionId, value)
+        }
+        onCorrectAnswerChange={(optionId) =>
+          updateQuestion(qIndex, {
+            correctAnswer: optionId,
+          })
+        }
+        onRemoveOption={(optionId) =>
+          removeOption(qIndex, optionId)
+        }
+      />
+
+      {!q.correctAnswer && (
+        <p className="mt-2 text-xs text-amber-600">
+          Click a letter to mark the correct answer.
+        </p>
+      )}
+    </div>
+  </>
+)}
+
+{q.type === "coding" && (
+  <CodingQuestion
+    language={q.language}
+    starterCode={q.starterCode}
+    sampleInput={q.sampleInput}
+    sampleOutput={q.sampleOutput}
+    onLanguageChange={(language) =>
+      updateQuestion(qIndex, {
+        language,
+      })
+    }
+    onCodeChange={(starterCode) =>
+      updateQuestion(qIndex, {
+        starterCode,
+      })
+    }
+    onSampleInputChange={(sampleInput) =>
+      updateQuestion(qIndex, {
+        sampleInput,
+      })
+    }
+    onSampleOutputChange={(sampleOutput) =>
+      updateQuestion(qIndex, {
+        sampleOutput,
+      })
+    }
+  />
+)}
+
+{q.type === "sql" && (
+  <SQLQuestion
+    question={q.question}
+    marks={q.marks}
+  />
+)}
+
+{q.type === "excel" && (
+  <ExcelQuestion
+    dataFileUrl={q.dataFileUrl}
+    dataFileName={q.dataFileName}
+    dataFileType={q.dataFileType}
+    uploading={
+      uploadingFor === `${qIndex}-dataset`
+    }
+    onDatasetUpload={(file) =>
+      handleDatasetUpload(
+        qIndex,
+        file
+      )
+    }
+    onRemoveDataset={() =>
+      updateQuestion(qIndex, {
+        dataFileUrl: "",
+        dataFileName: "",
+        dataFileType: "",
+      })
+    }
+  />
+)}
+
+{q.type === "upload" && <UploadQuestion />}
 
               {/* Marks */}
-              <div className="flex items-center gap-3">
-                <label className="text-xs font-medium text-slate-600">Marks:</label>
-                <input
-                  type="number"
-                  value={q.marks}
-                  min={0}
-                  max={100}
-                  onChange={(e) => updateQuestion(qIndex, { marks: Number(e.target.value) })}
-                  className="w-20 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-center focus:border-purple-500 focus:outline-none"
-                />
-              </div>
+              <MarksInput
+    value={q.marks}
+    onChange={(marks)=>
+        updateQuestion(qIndex,{
+            marks,
+        })
+    }
+/>
             </div>
           </div>
         ))}

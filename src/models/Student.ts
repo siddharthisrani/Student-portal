@@ -2,13 +2,16 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export type CourseType =
-  | 'MERN Stack'
-  | 'Java Full Stack'
-  | 'Python Full Stack'
-  | 'Data Analytics'
-  | 'AI & Machine Learning'
-  | 'Flutter'
-  | 'UI/UX';
+  | "MERN Stack"
+  | "Java Full Stack"
+  | "Python Full Stack"
+  | "Flutter"
+  | "Data Analytics"
+  | "Data Science"
+  | "AI & Machine Learning"
+  | "Cyber Security"
+  | "Digital Marketing"
+  | "UI/UX";
 
 export interface IStudent extends Document {
   _id: mongoose.Types.ObjectId;
@@ -69,15 +72,18 @@ const StudentSchema = new Schema<IStudent>(
     course: {
       type: String,
       required: [true, 'Course is required'],
-      enum: [
-        'MERN Stack',
-        'Java Full Stack',
-        'Python Full Stack',
-        'Data Analytics',
-        'AI & Machine Learning',
-        'Flutter',
-        'UI/UX',
-      ],
+     enum: [
+  "MERN Stack",
+  "Java Full Stack",
+  "Python Full Stack",
+  "Flutter",
+  "Data Analytics",
+  "Data Science",
+  "AI & Machine Learning",
+  "Cyber Security",
+  "Digital Marketing",
+  "UI/UX",
+],
     },
     batch: {
       type: String,

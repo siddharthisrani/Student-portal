@@ -5,13 +5,18 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, ClipboardList, BarChart3,
-  UserCircle, LogOut, Menu, X, BookOpen, ChevronRight, Settings,CalendarCheck 
+  UserCircle, LogOut, Menu, X, BookOpen, ChevronRight, Settings,CalendarCheck,FileCheck2 
 } from 'lucide-react';
 
 const navItems = [
   { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/students', icon: Users, label: 'Students' },
   { href: '/admin/tests', icon: ClipboardList, label: 'Tests' },
+  {
+  label: "Submissions",
+  href: "/admin/submissions",
+  icon: FileCheck2,
+},
   { href: '/admin/results', icon: BarChart3, label: 'Results' },
   { href: '/admin/profile', icon: UserCircle, label: 'Profile' },
   {

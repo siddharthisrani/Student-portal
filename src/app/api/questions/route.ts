@@ -5,21 +5,134 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 import Question from '@/models/Question';
 import Test from '@/models/Test';
 
-const createQuestionSchema = z.object({
-  testId: z.string().min(1),
-  type: z.enum(['mcq', 'image_mcq', 'pdf_mcq', 'text']),
-  question: z.string().min(1, 'Question text is required'),
-  options: z.array(z.object({ id: z.string(), text: z.string() })).min(2).max(6),
-  correctAnswer: z.string().min(1, 'Correct answer is required'),
+const questionBaseSchema = z.object({
+  type: z.enum([
+    "mcq",
+    "image_mcq",
+    "pdf_mcq",
+    "text",
+    "coding",
+    "sql",
+    "excel",
+    "upload",
+  ]),
+
+  question: z.string().min(1, "Question text is required"),
+
+  options: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+    })
+  ).optional(),
+
+  correctAnswer: z.string().optional(),
+
   marks: z.number().min(0).max(100).default(1),
+
   imageUrl: z.string().optional().nullable(),
+
   pdfUrl: z.string().optional().nullable(),
+
   order: z.number().default(0),
+
+  language: z.string().optional(),
+
+  starterCode: z.string().optional(),
+
+  sampleInput: z.string().optional(),
+
+  sampleOutput: z.string().optional(),
+  tableName: z.string().optional(),
+
+dataFileUrl: z.string().optional().nullable(),
+
+dataFileName: z.string().optional().nullable(),
+
+dataFileType: z.string().optional().nullable(),
+  allowedExtensions: z.array(z.string()).optional(),
+
+maxFileSize: z.number().optional(),
 });
 
+function validateQuestion(
+  data: z.infer<typeof questionBaseSchema>,
+  ctx: z.RefinementCtx
+) {
+
+  switch (data.type) {
+
+    case "mcq":
+    case "image_mcq":
+    case "pdf_mcq":
+
+      if (!data.options || data.options.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["options"],
+          message: "Minimum 2 options required.",
+        });
+      }
+
+      if (!data.correctAnswer) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["correctAnswer"],
+          message: "Please select correct answer.",
+        });
+      }
+
+      break;
+
+    case "coding":
+
+      if (!data.language) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["language"],
+          message: "Programming language required.",
+        });
+      }
+
+      if (!data.starterCode?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["starterCode"],
+          message: "Starter code required.",
+        });
+      }
+
+      break;
+
+    case "sql":
+
+  // Dataset is OPTIONAL.
+  // Student can answer SQL question without uploaded dataset.
+
+  break;
+
+    default:
+      break;
+  }
+
+}
+
+const questionSchema =
+  questionBaseSchema.superRefine(validateQuestion);
+
+const createQuestionSchema =
+  questionBaseSchema
+    .extend({
+      testId: z.string().min(1),
+    })
+    .superRefine(validateQuestion);
+
 const bulkQuestionsSchema = z.object({
-  testId: z.string().min(1),
-  questions: z.array(createQuestionSchema.omit({ testId: true })),
+
+    testId: z.string(),
+
+    questions: z.array(questionSchema),
+
 });
 
 export async function POST(request: NextRequest) {
@@ -49,11 +162,51 @@ export async function POST(request: NextRequest) {
       // Delete existing questions for this test and replace
       await Question.deleteMany({ testId });
 
-      const questionsToCreate = questions.map((q, index) => ({
-        ...q,
-        testId,
-        order: q.order ?? index,
-      }));
+     const questionsToCreate = questions.map((question, index) => ({
+
+  ...question,
+
+  testId,
+
+  order: question.order ?? index,
+
+  options: question.options ?? [],
+
+  correctAnswer: question.correctAnswer ?? "",
+
+  language: question.language ?? "",
+
+  starterCode: question.starterCode ?? "",
+
+  sampleInput: question.sampleInput ?? "",
+
+  sampleOutput: question.sampleOutput ?? "",
+
+tableName:
+  question.tableName ?? "",
+
+dataFileUrl:
+  question.dataFileUrl ?? "",
+
+dataFileName:
+  question.dataFileName ?? "",
+
+dataFileType:
+  question.dataFileType ?? "",
+
+imageUrl:
+  question.imageUrl ?? "",
+
+pdfUrl:
+  question.pdfUrl ?? "",
+
+  allowedExtensions:
+    question.allowedExtensions ?? [],
+
+  maxFileSize:
+    question.maxFileSize ?? 10,
+
+}));
 
       const createdQuestions = await Question.insertMany(questionsToCreate);
 

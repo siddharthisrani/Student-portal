@@ -7,14 +7,71 @@ import Admin from '@/models/Admin';
 void Admin;
 
 const createTestSchema = z.object({
-  title: z.string().min(3, 'Title must be at least 3 characters').max(200),
-  description: z.string().optional().default(''),
-  course: z.enum(['All', 'MERN Stack', 'Java Full Stack', 'Python Full Stack', 'Data Analytics', 'AI & Machine Learning', 'Flutter', 'UI/UX']),
-  date: z.string().refine((d) => !isNaN(Date.parse(d)), 'Invalid date'),
-  duration: z.number().min(5).max(300),
-  passingMarks: z.number().min(0).default(0),
-  status: z.enum(['draft', 'published', 'expired']).default('draft'),
-  instructions: z.array(z.string()).optional(),
+  title: z
+    .string()
+    .min(3, 'Title must be at least 3 characters')
+    .max(200),
+
+  description: z
+    .string()
+    .optional()
+    .default(''),
+
+  course: z.enum([
+    'All',
+    'MERN Stack',
+    'Java Full Stack',
+    'Python Full Stack',
+    'Data Analytics',
+    'Data Science',
+    'AI & Machine Learning',
+    'Flutter',
+    'UI/UX',
+    'Cyber Security',
+    'Digital Marketing',
+  ]),
+
+  // ⭐ IMPORTANT
+  targetType: z
+    .enum(['all', 'course', 'batch', 'students'])
+    .default('course'),
+
+  // ⭐ IMPORTANT
+  batch: z
+    .string()
+    .optional()
+    .default('All'),
+
+  // ⭐ IMPORTANT
+  studentIds: z
+    .array(z.string())
+    .optional()
+    .default([]),
+
+  date: z
+    .string()
+    .refine(
+      (d) => !isNaN(Date.parse(d)),
+      'Invalid date'
+    ),
+
+  duration: z
+    .number()
+    .min(5)
+    .max(300),
+
+  passingMarks: z
+    .number()
+    .min(0)
+    .default(0),
+
+  status: z
+    .enum(['draft', 'published', 'expired'])
+    .default('draft'),
+
+  instructions: z
+    .array(z.string())
+    .optional(),
 });
 
 // GET all tests

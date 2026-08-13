@@ -6,14 +6,69 @@ import Test from '@/models/Test';
 import Question from '@/models/Question';
 
 const updateTestSchema = z.object({
-  title: z.string().min(3).max(200).optional(),
-  description: z.string().optional(),
-  course: z.enum(['All', 'MERN Stack', 'Java Full Stack', 'Python Full Stack', 'Data Analytics', 'AI & Machine Learning', 'Flutter', 'UI/UX']).optional(),
-  date: z.string().optional(),
-  duration: z.number().min(5).max(300).optional(),
-  passingMarks: z.number().min(0).optional(),
-  status: z.enum(['draft', 'published', 'expired']).optional(),
-  instructions: z.array(z.string()).optional(),
+  title: z
+    .string()
+    .min(3)
+    .max(200)
+    .optional(),
+
+  description: z
+    .string()
+    .optional(),
+
+  course: z
+    .enum([
+      'All',
+      'MERN Stack',
+      'Java Full Stack',
+      'Python Full Stack',
+      'Data Analytics',
+      'Data Science',
+      'AI & Machine Learning',
+      'Flutter',
+      'UI/UX',
+      'Cyber Security',
+      'Digital Marketing',
+    ])
+    .optional(),
+
+  // ⭐ IMPORTANT
+  targetType: z
+    .enum(['all', 'course', 'batch', 'students'])
+    .optional(),
+
+  // ⭐ IMPORTANT
+  batch: z
+    .string()
+    .optional(),
+
+  // ⭐ IMPORTANT
+  studentIds: z
+    .array(z.string())
+    .optional(),
+
+  date: z
+    .string()
+    .optional(),
+
+  duration: z
+    .number()
+    .min(5)
+    .max(300)
+    .optional(),
+
+  passingMarks: z
+    .number()
+    .min(0)
+    .optional(),
+
+  status: z
+    .enum(['draft', 'published', 'expired'])
+    .optional(),
+
+  instructions: z
+    .array(z.string())
+    .optional(),
 });
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +100,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         imageUrl: q.imageUrl,
         pdfUrl: q.pdfUrl,
         order: q.order,
+         tableName: q.tableName,
+  dataFileUrl: q.dataFileUrl,
+  dataFileName: q.dataFileName,
+  dataFileType: q.dataFileType,
         // correctAnswer intentionally omitted for students
       }));
     } else {

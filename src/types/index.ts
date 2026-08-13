@@ -41,7 +41,15 @@ export interface TestData {
 export interface QuestionData {
   _id: string;
   testId: string;
-  type: 'mcq' | 'image_mcq' | 'pdf_mcq' | 'text';
+  type:
+    | 'mcq'
+    | 'image_mcq'
+    | 'pdf_mcq'
+    | 'text'
+    | 'coding'
+    | 'sql'
+    | 'excel'
+    | 'upload';
   question: string;
   options: { id: string; text: string }[];
   correctAnswer?: string;
@@ -49,6 +57,21 @@ export interface QuestionData {
   imageUrl?: string;
   pdfUrl?: string;
   order: number;
+   // Coding
+  language?: string;
+  starterCode?: string;
+  sampleInput?: string;
+  sampleOutput?: string;
+
+  // SQL Dataset
+  tableName?: string;
+  dataFileUrl?: string;
+  dataFileName?: string;
+  dataFileType?: string;
+
+  // File Upload
+  allowedExtensions?: string[];
+  maxFileSize?: number;
 }
 
 export interface SubmissionData {

@@ -1,0 +1,10 @@
+export { default as QuestionHeader } from "./QuestionHeader";
+export { default as MarksInput } from "./MarksInput";
+export { default as TextQuestion } from "./TextQuestion";
+export { default as MCQQuestion } from "./MCQQuestion";
+export { default as ImageMCQ } from "./ImageMCQ";
+export { default as PdfMCQ } from "./PdfMCQ";
+export { default as CodingQuestion } from "./CodingQuestion";
+export { default as SQLQuestion } from "./SQLQuestion";
+export { default as ExcelQuestion } from "./ExcelQuestion";
+export { default as UploadQuestion } from "./UploadQuestion";

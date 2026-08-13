@@ -1,6 +1,14 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema } from "mongoose";
 
-export type QuestionType = 'mcq' | 'image_mcq' | 'pdf_mcq' | 'text';
+export type QuestionType =
+  | "mcq"
+  | "image_mcq"
+  | "pdf_mcq"
+  | "text"
+  | "coding"
+  | "sql"
+  | "excel"
+  | "upload";
 
 export interface IOption {
   id: string;
@@ -9,77 +17,212 @@ export interface IOption {
 
 export interface IQuestion extends Document {
   _id: mongoose.Types.ObjectId;
+
   testId: mongoose.Types.ObjectId;
+
   type: QuestionType;
+
   question: string;
-  options: IOption[];
-  correctAnswer: string; // option id
+
   marks: number;
-  imageUrl?: string;
-  pdfUrl?: string;
+
   order: number;
+
+  // --------------------
+  // MCQ
+  // --------------------
+
+  options: IOption[];
+
+  correctAnswer: string;
+
+  // --------------------
+  // Media
+  // --------------------
+
+  imageUrl?: string;
+
+  pdfUrl?: string;
+
+  // --------------------
+  // Coding / SQL
+  // --------------------
+
+  language?: string;
+
+  starterCode?: string;
+
+  sampleInput?: string;
+
+  sampleOutput?: string;
+
+  tableName?: string;
+  dataFileUrl?: string;
+  dataFileName?: string;
+  dataFileType?: string;
+
+  // --------------------
+  // Upload
+  // --------------------
+
+  allowedExtensions?: string[];
+
+  maxFileSize?: number;
+
   createdAt: Date;
+
   updatedAt: Date;
 }
 
 const OptionSchema = new Schema<IOption>(
   {
-    id: { type: String, required: true },
-    text: { type: String, required: true },
+    id: {
+      type: String,
+      required: true,
+    },
+
+    text: {
+      type: String,
+      required: true,
+    },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 const QuestionSchema = new Schema<IQuestion>(
   {
     testId: {
       type: Schema.Types.ObjectId,
-      ref: 'Test',
+      ref: "Test",
       required: true,
       index: true,
     },
+
     type: {
       type: String,
-      enum: ['mcq', 'image_mcq', 'pdf_mcq', 'text'],
       required: true,
-      default: 'mcq',
+      default: "mcq",
+
+      enum: [
+        "mcq",
+        "image_mcq",
+        "pdf_mcq",
+        "text",
+        "coding",
+        "sql",
+        "excel",
+        "upload",
+      ],
     },
+
     question: {
       type: String,
-      required: [true, 'Question text is required'],
+      required: true,
       trim: true,
     },
-    options: {
-      type: [OptionSchema],
-      validate: {
-        validator: function (v: IOption[]) {
-          return v.length >= 2 && v.length <= 6;
-        },
-        message: 'Questions must have between 2 and 6 options',
-      },
-    },
-    correctAnswer: {
-      type: String,
-      required: [true, 'Correct answer is required'],
-    },
+
     marks: {
       type: Number,
-      required: true,
       default: 1,
-      min: [0, 'Marks cannot be negative'],
-      max: [100, 'Marks cannot exceed 100'],
+      min: 0,
+      max: 100,
     },
-    imageUrl: {
-      type: String,
-      default: null,
-    },
-    pdfUrl: {
-      type: String,
-      default: null,
-    },
+
     order: {
       type: Number,
       default: 0,
+    },
+
+    // ==========================
+    // MCQ
+    // ==========================
+
+    options: {
+      type: [OptionSchema],
+      default: [],
+    },
+
+    correctAnswer: {
+      type: String,
+      default: "",
+    },
+
+    // ==========================
+    // IMAGE / PDF
+    // ==========================
+
+    imageUrl: {
+      type: String,
+      default: "",
+    },
+
+    pdfUrl: {
+      type: String,
+      default: "",
+    },
+
+    // ==========================
+    // CODING / SQL
+    // ==========================
+
+    language: {
+      type: String,
+      default: "",
+    },
+
+    starterCode: {
+      type: String,
+      default: "",
+    },
+
+    sampleInput: {
+      type: String,
+      default: "",
+    },
+
+    sampleOutput: {
+      type: String,
+      default: "",
+    },
+
+    // ==========================
+// SQL DATASET
+// ==========================
+
+tableName: {
+  type: String,
+  default: "",
+},
+
+dataFileUrl: {
+  type: String,
+  default: "",
+},
+
+dataFileName: {
+  type: String,
+  default: "",
+},
+
+dataFileType: {
+  type: String,
+  default: "",
+},
+
+    // ==========================
+    // UPLOAD
+    // ==========================
+
+    allowedExtensions: {
+      type: [String],
+      default: [],
+    },
+
+    maxFileSize: {
+      type: Number,
+      default: 10, // MB
     },
   },
   {
@@ -87,6 +230,19 @@ const QuestionSchema = new Schema<IQuestion>(
   }
 );
 
-const Question: Model<IQuestion> = mongoose.models.Question || mongoose.model<IQuestion>('Question', QuestionSchema);
+// Useful indexes
+QuestionSchema.index({
+  testId: 1,
+  order: 1,
+});
+
+QuestionSchema.index({
+  testId: 1,
+  type: 1,
+});
+
+const Question: Model<IQuestion> =
+  mongoose.models.Question ||
+  mongoose.model<IQuestion>("Question", QuestionSchema);
 
 export default Question;

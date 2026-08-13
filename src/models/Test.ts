@@ -18,6 +18,9 @@ export interface ITest extends Document {
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+  targetType: "all" | "course" | "batch" | "students";
+batch: string;
+studentIds: mongoose.Types.ObjectId[];
 }
 
 const TestSchema = new Schema<ITest>(
@@ -37,16 +40,40 @@ const TestSchema = new Schema<ITest>(
       type: String,
       required: [true, 'Course is required'],
       enum: [
-        'All',
-        'MERN Stack',
-        'Java Full Stack',
-        'Python Full Stack',
-        'Data Analytics',
-        'AI & Machine Learning',
-        'Flutter',
-        'UI/UX',
-      ],
+  "All",
+  "MERN Stack",
+  "Java Full Stack",
+  "Python Full Stack",
+  "Flutter",
+  "Data Analytics",
+  "Data Science",
+  "AI & Machine Learning",
+  "Cyber Security",
+  "Digital Marketing",
+  "UI/UX",
+],
     },
+    targetType: {
+  type: String,
+  enum: ["all", "course", "batch", "students"],
+  default: "course",
+},
+
+batch: {
+  type: String,
+  trim: true,
+  default: "All",
+},
+
+studentIds: {
+  type: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Student",
+    },
+  ],
+  default: [],
+},
     date: {
       type: Date,
       required: [true, 'Test date is required'],
@@ -98,7 +125,13 @@ const TestSchema = new Schema<ITest>(
 );
 
 // Index for finding today's tests by course
-TestSchema.index({ date: 1, course: 1, status: 1 });
+TestSchema.index({
+  status: 1,
+  date: 1,
+  targetType: 1,
+  course: 1,
+  batch: 1,
+});
 
 const Test: Model<ITest> = mongoose.models.Test || mongoose.model<ITest>('Test', TestSchema);
 
