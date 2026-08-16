@@ -14,6 +14,7 @@ import CodingQuestion from "./question-builder/CodingQuestion";
 import SQLQuestion from "./question-builder/SQLQuestion";
 import ExcelQuestion from "./question-builder/ExcelQuestion";
 import UploadQuestion from "./question-builder/UploadQuestion";
+import BulkMCQUpload from "./question-builder/BulkMCQUpload";
 
 interface Option {
   id: string;
@@ -227,6 +228,24 @@ export default function QuestionBuilder({ testId }: QuestionBuilderProps) {
     } finally {
       setUploadingFor(null);
     }
+  };
+
+  const handleBulkUpload = (newQuestions: Question[]) => {
+    setQuestions((prev) => {
+      // If the builder only has one empty default question, replace it entirely
+      const isDefaultBlank = 
+        prev.length === 1 && 
+        prev[0].question === "" && 
+        prev[0].type === "mcq";
+        
+      const base = isDefaultBlank ? [] : prev;
+
+      // Merge arrays and recalculate the order property
+      return [...base, ...newQuestions].map((q, i) => ({
+        ...q,
+        order: i,
+      }));
+    });
   };
 
  const handleDatasetUpload = async (
@@ -797,12 +816,24 @@ onDelete={()=>removeQuestion(qIndex)}
         ))}
 
         {/* Add Question Button */}
-        <button
-          onClick={addQuestion}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-slate-500 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 transition-all"
-        >
-          <Plus className="h-4 w-4" /> Add Question
-        </button>
+        {/* Replace the old Add Question button with this grid */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          
+          {/* Manual Add Button */}
+          <button
+            onClick={addQuestion}
+            className="flex w-full h-full min-h-[160px] flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-300 p-6 text-sm font-medium text-slate-500 transition-all hover:border-purple-400 hover:bg-purple-50 hover:text-purple-600"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 transition-colors group-hover:bg-purple-100">
+              <Plus className="h-6 w-6" />
+            </div>
+            Add Single Question
+          </button>
+
+          {/* Bulk Upload Component */}
+          <BulkMCQUpload onUpload={handleBulkUpload} />
+          
+        </div>
       </div>
     </div>
   );
