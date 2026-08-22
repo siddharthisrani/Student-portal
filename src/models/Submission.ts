@@ -31,6 +31,10 @@ export interface ISubmission extends Document {
 
   studentId: mongoose.Types.ObjectId;
 
+    studentName: string;
+  studentEmail: string;
+  testTitle: string;
+
   answers: IAnswer[];
 
   totalScore: number;
@@ -131,6 +135,24 @@ const SubmissionSchema =
         required: true,
         index: true,
       },
+
+      studentName: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
+studentEmail: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
+testTitle: {
+  type: String,
+  default: "",
+  trim: true,
+},
 
       answers: {
         type: [AnswerSchema],

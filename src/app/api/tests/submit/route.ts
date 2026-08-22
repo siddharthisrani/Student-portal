@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-
 import { connectDB } from "@/lib/mongodb";
 import { getAuthUserFromRequest } from "@/lib/auth";
 
@@ -7,355 +6,200 @@ import Test from "@/models/Test";
 import TestAttempt from "@/models/TestAttempt";
 import Submission from "@/models/Submission";
 import Question from "@/models/Question";
+import Student from "@/models/Student";
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
-    const user =
-      getAuthUserFromRequest(request);
+    const user = getAuthUserFromRequest(request);
 
-    if (
-      !user ||
-      user.role !== "student"
-    ) {
+    if (!user || user.role !== "student") {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized",
-        },
-        {
-          status: 401,
-        }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
 
     await connectDB();
 
-    // ==================================================
-    // REQUEST BODY
-    // ==================================================
+    const body = await request.json();
+    const { testId, answers, autoSubmitted = false } = body;
 
-    const body =
-      await request.json();
+   const [student, test] = await Promise.all([
+  Student.findById(user.id)
+    .select("name email")
+    .lean(),
 
-    const {
+  Test.findById(testId)
+    .select("title totalMarks passingMarks")
+    .lean(),
+]);
+
+if (!student) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Student not found.",
+    },
+    { status: 404 }
+  );
+}
+
+if (!test) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Test not found.",
+    },
+    { status: 404 }
+  );
+}
+
+    // 1. Check if an actual submission exists
+    const existingSubmission = await Submission.findOne({
       testId,
-      answers,
-      autoSubmitted = false,
-    } = body;
+      studentId: user.id,
+    });
 
-    console.log(
-      "Submit request:",
-      {
-        testId,
-        autoSubmitted,
-        answers,
-      }
-    );
-
-    // ==================================================
-    // FIND TEST
-    // ==================================================
-
-    const test =
-      await Test.findById(testId);
-
-    if (!test) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Test not found.",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    // ==================================================
-    // ALREADY SUBMITTED?
-    // ==================================================
-
-    const existingSubmission =
-      await Submission.findOne({
-        testId,
-        studentId: user.id,
-      });
-
-    if (existingSubmission) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Test already submitted.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ==================================================
-    // FIND ATTEMPT
-    // ==================================================
-
-    const attempt =
-      await TestAttempt.findOne({
-        student: user.id,
-        test: testId,
-      });
+    // 2. Grab their attempt record
+    const attempt = await TestAttempt.findOne({
+      student: user.id,
+      test: testId,
+    });
 
     if (!attempt) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Attempt not found.",
-        },
-        {
-          status: 404,
-        }
+        { success: false, message: "Attempt not found." },
+        { status: 404 }
       );
     }
 
-    // ==================================================
-    // FIND QUESTIONS
-    // ==================================================
-
-    const questions =
-      await Question.find({
-        testId,
-      })
-        .sort({
-          order: 1,
-        })
-        .lean();
+    if (existingSubmission) {
+      if (attempt.status !== "submitted") {
+        await TestAttempt.updateOne(
+          { _id: attempt._id },
+          { $set: { status: "submitted" } }
+        );
+      }
+      return NextResponse.json(
+        { success: false, message: "Test already submitted." },
+        { status: 400 }
+      );
+    }
 
     // ==================================================
     // BUILD SUBMISSION ANSWERS
     // ==================================================
+    const questions = await Question.find({ testId }).sort({ order: 1 }).lean();
 
-    const submissionAnswers =
-      questions.map(
-        (question: any) => {
+   const latestAnswers =
+  answers &&
+  typeof answers === "object"
+    ? {
+        ...(attempt.answers || {}),
+        ...answers,
+      }
+    : attempt.answers || {};
 
-          /*
-           * IMPORTANT:
-           *
-           * 1. Use the latest answers sent
-           *    directly from TestEngine.
-           *
-           * 2. If not available, use MongoDB
-           *    TestAttempt answers.
-           *
-           * 3. Otherwise null.
-           *
-           * This fixes the auto-submit null issue.
-           */
+const submissionAnswers = questions.map((question: any) => {
+  const studentAnswer =
+    latestAnswers[question._id.toString()] ?? null;
 
-          const studentAnswer =
-            answers?.[
-              question._id.toString()
-            ] ??
-            attempt.answers?.[
-              question._id.toString()
-            ] ??
-            null;
+      let obtainedMarks = 0;
+      let checked = false;
 
-          let obtainedMarks = 0;
-
-          let checked = false;
-
-          // ==================================================
-          // MCQ AUTO CHECK
-          // ==================================================
-
-          if (
-            question.type === "mcq" ||
-            question.type ===
-              "image_mcq" ||
-            question.type ===
-              "pdf_mcq"
-          ) {
-            checked = true;
-
-            if (
-              studentAnswer ===
-              question.correctAnswer
-            ) {
-              obtainedMarks =
-                question.marks;
-            }
-          }
-
-          return {
-            questionId:
-              question._id,
-
-            answer:
-              studentAnswer,
-
-            obtainedMarks,
-
-            maxMarks:
-              question.marks,
-
-            checked,
-
-            feedback: "",
-          };
+      // Auto-grade MCQs
+      if (
+        question.type === "mcq" ||
+        question.type === "image_mcq" ||
+        question.type === "pdf_mcq"
+      ) {
+        checked = true;
+        if (studentAnswer === question.correctAnswer) {
+          obtainedMarks = question.marks;
         }
-      );
+      }
+
+      return {
+        questionId: question._id,
+        answer: studentAnswer,
+        obtainedMarks,
+        maxMarks: question.marks,
+        checked,
+        feedback: "",
+      };
+    });
+
+    const startedAt = attempt.startedAt || new Date();
+    const submittedAt = new Date();
+    const timeTaken = Math.floor(
+      (submittedAt.getTime() - startedAt.getTime()) / 1000
+    );
+
+    const totalScore = submissionAnswers.reduce(
+      (sum, answer) => sum + answer.obtainedMarks,
+      0
+    );
+
+    const allQuestionsChecked = submissionAnswers.every((a) => a.checked);
 
     // ==================================================
-    // TIME
+    // SAVE TO BOTH MODELS SAFELY
     // ==================================================
+    
+    // 1. Create the final Submission
+    const submission = await Submission.create({
+      testId,
+      studentId: user.id,
+      studentName: student.name || "",
+  studentEmail: student.email || "",
+  testTitle: test.title || "",
+      answers: submissionAnswers,
+      totalMarks: test.totalMarks,
+      totalScore,
+      passingMarks: test.passingMarks,
+      startedAt,
+      submittedAt,
+      timeTaken,
+      isAutoSubmitted: Boolean(autoSubmitted),
+      status: allQuestionsChecked ? "checked" : "submitted",
+    });
 
-    const startedAt =
-      attempt.startedAt ||
-      new Date();
-
-    const submittedAt =
-      new Date();
-
-    const timeTaken =
-      Math.floor(
-        (submittedAt.getTime() -
-          startedAt.getTime()) /
-          1000
-      );
-
-    // ==================================================
-    // TOTAL SCORE
-    // ==================================================
-
-    const totalScore =
-      submissionAnswers.reduce(
-        (
-          sum,
-          answer
-        ) =>
-          sum +
-          answer.obtainedMarks,
-        0
-      );
-
-    // ==================================================
-    // STATUS
-    // ==================================================
-
-    const allQuestionsChecked =
-      submissionAnswers.every(
-        (answer) =>
-          answer.checked
-      );
-
-    // ==================================================
-    // CREATE SUBMISSION
-    // ==================================================
-
-    const submission =
-      await Submission.create({
-
-        testId,
-
-        studentId:
-          user.id,
-
-        answers:
-          submissionAnswers,
-
-        totalMarks:
-          test.totalMarks,
-
-        totalScore,
-
-        passingMarks:
-          test.passingMarks,
-
-        startedAt,
-
-        submittedAt,
-
-        timeTaken,
-
-        /*
-         * NOW THIS IS CORRECT.
-         */
-        isAutoSubmitted:
-          Boolean(
-            autoSubmitted
-          ),
-
-        status:
-          allQuestionsChecked
-            ? "checked"
-            : "submitted",
-      });
-
-    // ==================================================
-    // LOCK ATTEMPT
-    // ==================================================
-
-    attempt.status =
-      "submitted";
-
-    attempt.submittedAt =
-      submittedAt;
-
-    /*
-     * Also save the latest answers
-     * into the attempt before locking it.
-     *
-     * This gives us an additional backup.
-     */
-    if (answers) {
-      attempt.answers =
-        answers;
-    }
-
-    await attempt.save();
-
-    // ==================================================
-    // RESPONSE
-    // ==================================================
+    // 2. Lock the Attempt and back up the final answers into it
+    await TestAttempt.updateOne(
+  { _id: attempt._id },
+  {
+    $set: {
+      status: "submitted",
+      submittedAt,
+      answers: latestAnswers,
+      lastSavedAt: submittedAt,
+      lastActivityAt: submittedAt,
+    },
+  }
+);
 
     return NextResponse.json({
       success: true,
-
       submission: {
-        _id:
-          submission._id.toString(),
-
-        isAutoSubmitted:
-          submission.isAutoSubmitted,
-
-        totalScore:
-          submission.totalScore,
-
-        totalMarks:
-          submission.totalMarks,
+        _id: submission._id.toString(),
+        isAutoSubmitted: submission.isAutoSubmitted,
+        totalScore: submission.totalScore,
+        totalMarks: submission.totalMarks,
       },
     });
 
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: "Test already submitted." },
+        { status: 400 }
+      );
+    }
 
-    console.error(
-      "Submit Test Error:",
-      error
-    );
-
+    console.error("Submit Test Error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message:
-          "Internal Server Error",
-      },
-      {
-        status: 500,
-      }
+      { success: false, message: "Internal Server Error" },
+      { status: 500 }
     );
   }
 }

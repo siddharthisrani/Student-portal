@@ -4,6 +4,10 @@ export interface ITestAttempt extends Document {
   student: mongoose.Types.ObjectId;
   test: mongoose.Types.ObjectId;
 
+  studentName: string;
+  studentEmail: string;
+  testTitle: string;
+
   answers: Record<string, any>;
 
   currentQuestion: number;
@@ -40,6 +44,24 @@ const TestAttemptSchema = new Schema<ITestAttempt>(
       ref: "Test",
       required: true,
     },
+
+    studentName: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
+studentEmail: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
+testTitle: {
+  type: String,
+  default: "",
+  trim: true,
+},
 
     answers: {
       type: Schema.Types.Mixed,

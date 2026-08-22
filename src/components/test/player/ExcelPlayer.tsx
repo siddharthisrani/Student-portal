@@ -717,11 +717,40 @@ if (!currentWorkbook) return;
     </div>
   );
 
-  /*
-   * When fullscreen is active, render it as an overlay.
-   *
-   * Otherwise render normally.
-   */
-
+ /*
+ * Fullscreen mode:
+ * Show only the Excel workspace.
+ */
+if (isFullscreen) {
   return spreadsheet;
+}
+
+/*
+ * Normal exam mode:
+ * Show the question first, then the Excel workspace.
+ */
+return (
+  <div className="space-y-6">
+
+    {/* Question */}
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-bold text-slate-900">
+        {question?.question || "Excel Assessment"}
+      </h2>
+
+      {question?.marks !== undefined && (
+        <p className="mt-2 text-sm text-slate-500">
+          Maximum Marks:{" "}
+          <span className="font-semibold text-slate-700">
+            {question.marks}
+          </span>
+        </p>
+      )}
+    </div>
+
+    {/* Excel Workspace */}
+    {spreadsheet}
+
+  </div>
+);
 }
