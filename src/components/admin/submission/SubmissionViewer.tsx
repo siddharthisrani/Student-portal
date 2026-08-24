@@ -30,76 +30,104 @@ export default function SubmissionViewer({
 
   const [message, setMessage] = useState("");
 
-useEffect(() => {
-  async function loadSubmission() {
-    try {
-      setLoading(true);
+  /*
+   * Tracks whether the current question has
+   * changes which have NOT been saved.
+   */
+  const [hasUnsavedChanges, setHasUnsavedChanges] =
+    useState(false);
 
-      const response = await fetch(
-        `/api/admin/submissions/${submissionId}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
+  /*
+   * ------------------------------------------------
+   * LOAD SUBMISSION
+   * ------------------------------------------------
+   */
 
-      const text = await response.text();
-
-      let data: any = null;
-
+  useEffect(() => {
+    async function loadSubmission() {
       try {
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        throw new Error(
-          `Invalid server response (${response.status})`
+        setLoading(true);
+
+        const response = await fetch(
+          `/api/admin/submissions/${submissionId}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
         );
+
+        const text = await response.text();
+
+        let data: any = null;
+
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          throw new Error(
+            `Invalid server response (${response.status})`
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              `Unable to load submission (${response.status})`
+          );
+        }
+
+        if (!data?.success || !data?.submission) {
+          throw new Error(
+            data?.message ||
+              "Submission not found."
+          );
+        }
+
+        setSubmission(data.submission);
+
+        /*
+         * Load first question's saved values.
+         */
+        if (
+          data.submission.answers &&
+          data.submission.answers.length > 0
+        ) {
+          const first =
+            data.submission.answers[0];
+
+          setMarks(
+            Number(first.obtainedMarks || 0)
+          );
+
+          setFeedback(
+            first.feedback || ""
+          );
+        }
+
+        /*
+         * Nothing is unsaved immediately
+         * after loading from MongoDB.
+         */
+        setHasUnsavedChanges(false);
+      } catch (error) {
+        console.error(
+          "Load submission error:",
+          error
+        );
+
+        setSubmission(null);
+      } finally {
+        setLoading(false);
       }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            `Unable to load submission (${response.status})`
-        );
-      }
-
-      if (!data?.success || !data?.submission) {
-        throw new Error(
-          data?.message ||
-            "Submission not found."
-        );
-      }
-
-      setSubmission(data.submission);
-
-      if (
-        data.submission.answers &&
-        data.submission.answers.length > 0
-      ) {
-        const first =
-          data.submission.answers[0];
-
-        setMarks(
-          Number(first.obtainedMarks || 0)
-        );
-
-        setFeedback(
-          first.feedback || ""
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Load submission error:",
-        error
-      );
-
-      setSubmission(null);
-    } finally {
-      setLoading(false);
     }
-  }
 
-  loadSubmission();
-}, [submissionId]);
+    loadSubmission();
+  }, [submissionId]);
+
+  /*
+   * ------------------------------------------------
+   * LOAD CURRENT QUESTION
+   * ------------------------------------------------
+   */
 
   useEffect(() => {
     if (!submission) return;
@@ -109,12 +137,26 @@ useEffect(() => {
 
     if (!current) return;
 
-    setMarks(current.obtainedMarks || 0);
+    setMarks(
+      Number(current.obtainedMarks || 0)
+    );
 
     setFeedback(
       current.feedback || ""
     );
+
+    /*
+     * Values came from the database/local
+     * saved state, so they are not dirty.
+     */
+    setHasUnsavedChanges(false);
   }, [currentQuestion, submission]);
+
+  /*
+   * ------------------------------------------------
+   * MESSAGE AUTO CLEAR
+   * ------------------------------------------------
+   */
 
   useEffect(() => {
     if (!message) return;
@@ -126,6 +168,12 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [message]);
 
+  /*
+   * ------------------------------------------------
+   * LOADING
+   * ------------------------------------------------
+   */
+
   if (loading) {
     return (
       <div className="flex h-[500px] items-center justify-center">
@@ -133,6 +181,12 @@ useEffect(() => {
       </div>
     );
   }
+
+  /*
+   * ------------------------------------------------
+   * NOT FOUND
+   * ------------------------------------------------
+   */
 
   if (!submission) {
     return (
@@ -142,8 +196,20 @@ useEffect(() => {
     );
   }
 
+  /*
+   * ------------------------------------------------
+   * READ ONLY
+   * ------------------------------------------------
+   */
+
   const readOnly =
     submission.status === "published";
+
+  /*
+   * ------------------------------------------------
+   * CURRENT ANSWER
+   * ------------------------------------------------
+   */
 
   const currentAnswer =
     submission.answers[currentQuestion];
@@ -152,10 +218,11 @@ useEffect(() => {
     Number(currentAnswer?.maxMarks || 0);
 
   /*
-   * ---------------------------------------
-   * MARKS VALIDATION
-   * ---------------------------------------
+   * ------------------------------------------------
+   * MARKS CHANGE
+   * ------------------------------------------------
    */
+
   const handleMarksChange = (
     value: number
   ) => {
@@ -165,28 +232,61 @@ useEffect(() => {
       newMarks = 0;
     }
 
-    // No negative marks
+    /*
+     * No negative marks.
+     */
     if (newMarks < 0) {
       newMarks = 0;
     }
 
-    // Never allow marks greater than question marks
+    /*
+     * Never allow marks greater than
+     * maximum question marks.
+     */
     if (newMarks > maxMarks) {
       newMarks = maxMarks;
     }
 
     setMarks(newMarks);
+
+    /*
+     * This is now a change which has not
+     * been saved to MongoDB.
+     */
+    setHasUnsavedChanges(true);
   };
 
   /*
-   * ---------------------------------------
-   * SAVE CURRENT QUESTION
-   * ---------------------------------------
+   * ------------------------------------------------
+   * FEEDBACK CHANGE
+   * ------------------------------------------------
    */
+
+ const handleFeedbackChange = (
+  value: React.SetStateAction<string>
+) => {
+  setFeedback(value);
+
+  /*
+   * Feedback has changed but has not
+   * been saved yet.
+   */
+  setHasUnsavedChanges(true);
+};
+
+  /*
+   * ------------------------------------------------
+   * SAVE CURRENT QUESTION
+   * ------------------------------------------------
+   */
+
   async function saveReview() {
     if (!currentAnswer) return;
 
-    // Final frontend validation
+    /*
+     * Final frontend validation.
+     */
+
     if (marks < 0) {
       alert("Marks cannot be negative.");
       return;
@@ -241,7 +341,7 @@ useEffect(() => {
       }
 
       /*
-       * Update local state
+       * Update local submission state.
        */
       setSubmission((prev: any) => {
         if (!prev) return prev;
@@ -288,10 +388,17 @@ useEffect(() => {
         };
       });
 
+      /*
+       * IMPORTANT:
+       *
+       * The current question has now been
+       * successfully saved to MongoDB.
+       */
+      setHasUnsavedChanges(false);
+
       setMessage(
         "Marks saved successfully."
       );
-
     } catch (error) {
       console.error(
         "Save review error:",
@@ -301,18 +408,34 @@ useEffect(() => {
       alert(
         "Unable to save marks."
       );
-
     } finally {
       setSaving(false);
     }
   }
 
   /*
-   * ---------------------------------------
+   * ------------------------------------------------
    * PUBLISH RESULT
-   * ---------------------------------------
+   * ------------------------------------------------
    */
+
   async function publish() {
+    /*
+     * IMPORTANT:
+     *
+     * Do this check FIRST.
+     *
+     * If admin changed marks/feedback and
+     * forgot Save Draft, publishing must stop.
+     */
+    if (hasUnsavedChanges) {
+      alert(
+        "Please save your changes before publishing."
+      );
+
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -359,6 +482,9 @@ useEffect(() => {
         return;
       }
 
+      /*
+       * Publish.
+       */
       const response =
         await fetch(
           "/api/admin/submissions/publish",
@@ -401,6 +527,11 @@ useEffect(() => {
         })
       );
 
+      /*
+       * No changes can remain after
+       * successful publishing.
+       */
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error(
         "Publish error:",
@@ -410,24 +541,38 @@ useEffect(() => {
       alert(
         "Unable to publish result."
       );
-
     } finally {
       setSaving(false);
     }
   }
 
+  /*
+   * ------------------------------------------------
+   * UI
+   * ------------------------------------------------
+   */
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
 
-     <SubmissionHeader
-  title={submission.testId?.title || "Test"}
-  student={submission.studentId?.name || "Student"}
-  status={submission.status}
-/>
+      <SubmissionHeader
+        title={
+          submission.testId?.title ||
+          "Test"
+        }
+        student={
+          submission.studentId?.name ||
+          "Student"
+        }
+        status={submission.status}
+      />
 
       <div className="grid grid-cols-[260px_1fr] gap-6">
 
-        {/* SIDEBAR */}
+        {/* -----------------------------------------
+            SIDEBAR
+        ------------------------------------------ */}
+
         <div className="rounded-2xl border bg-white p-5">
 
           <h2 className="mb-5 text-lg font-bold">
@@ -464,21 +609,28 @@ useEffect(() => {
 
         </div>
 
-        {/* MAIN CONTENT */}
+        {/* -----------------------------------------
+            MAIN CONTENT
+        ------------------------------------------ */}
+
         <div className="space-y-6">
 
           {/* QUESTION REVIEW */}
+
           <QuestionReview
             submission={submission}
             index={currentQuestion}
             marks={marks}
             feedback={feedback}
             setMarks={handleMarksChange}
-            setFeedback={setFeedback}
+            setFeedback={
+              handleFeedbackChange
+            }
             readOnly={readOnly}
           />
 
-          {/* MAX MARKS INFORMATION */}
+          {/* MAX MARKS */}
+
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
 
             <div className="flex items-center justify-between">
@@ -494,10 +646,24 @@ useEffect(() => {
             </div>
 
             <div className="mt-1 text-xs text-slate-400">
-              Marks must be between 0 and {maxMarks}.
+              Marks must be between 0 and{" "}
+              {maxMarks}.
             </div>
 
           </div>
+
+          {/* UNSAVED WARNING */}
+
+          {hasUnsavedChanges &&
+            !readOnly && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                You have unsaved changes.
+                Please save your changes
+                before publishing.
+              </div>
+            )}
+
+          {/* SUCCESS MESSAGE */}
 
           {message && (
             <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
@@ -505,7 +671,10 @@ useEffect(() => {
             </div>
           )}
 
-          {/* ACTION BUTTONS */}
+          {/* ---------------------------------------
+              ACTION BUTTONS
+          ---------------------------------------- */}
+
           {!readOnly && (
             <div className="flex items-center justify-end gap-3">
 
