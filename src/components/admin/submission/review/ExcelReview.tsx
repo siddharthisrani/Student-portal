@@ -117,7 +117,7 @@ export default function ExcelReview({
 
           sheet.celldata.forEach((cell: any) => {
             if (cell && typeof cell.r === "number" && typeof cell.c === "number") {
-              rebuiltData[cell.r][cell.c] = cell.v;
+             rebuiltData[cell.r][cell.c] = cell.v;
             }
           });
 
@@ -140,14 +140,38 @@ export default function ExcelReview({
   }, [answer]);
 
   function fortuneSheetToAOA(data: any[][]) {
-    return (data || []).map((row) =>
-      (row || []).map((cell) => {
-        if (cell === null || cell === undefined) return "";
-        if (typeof cell === "object") return cell.v ?? cell.m ?? "";
-        return cell;
-      })
-    );
-  }
+  return (data || []).map((row) =>
+    (row || []).map((cell) => {
+      if (cell === null || cell === undefined) {
+        return "";
+      }
+
+      if (typeof cell === "object") {
+        const formula =
+          cell.f ??
+          cell.formula ??
+          cell.formulaText;
+
+        const value =
+          cell.v ??
+          cell.m ??
+          "";
+
+        // Preserve formula in exported Excel
+        if (formula) {
+          return {
+            f: formula,
+            v: value,
+          };
+        }
+
+        return value;
+      }
+
+      return cell;
+    })
+  );
+}
 
   const downloadWorkbook = async () => {
     if (!workbook?.sheets?.length) return;
@@ -216,26 +240,39 @@ export default function ExcelReview({
   const currentSheet = workbook.sheets[activeSheet];
 
   function getCellValue(cell: any) {
-    if (cell === null || cell === undefined) return "";
-    if (typeof cell === "object") {
-      if ("v" in cell) return cell.v ?? "";
-      if ("m" in cell) return cell.m ?? "";
-      return "";
-    }
-    return String(cell);
+  if (cell === null || cell === undefined) {
+    return "";
   }
 
+  if (typeof cell === "object") {
+    return cell.v ?? cell.m ?? "";
+  }
+
+  return String(cell);
+}
+
+function getCellFormula(cell: any) {
+  if (!cell || typeof cell !== "object") {
+    return null;
+  }
+
+  return (
+    cell.f ??
+    cell.formula ??
+    cell.formulaText ??
+    null
+  );
+}
+
  return (
-    // FIX: Added `min-w-0 w-full`
-    <div className="space-y-5 min-w-0 w-full">
+    // THE ULTIMATE FIX: grid-cols-[minmax(0,1fr)] forcefully stops the component from expanding past the screen
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 w-full">
       
       {/* EXCEL WORKSPACE CONTAINER */}
-      {/* FIX: Added `min-w-0 w-full` */}
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm min-w-0 w-full">
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm w-full">
         
         {/* HEADER */}
         <div className="flex items-center justify-between border-b bg-white px-4 py-3">
-          {/* ... (keep header contents the same) ... */}
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
               <FileSpreadsheet className="h-5 w-5 text-green-600" />
@@ -296,9 +333,9 @@ export default function ExcelReview({
         </div>
 
         {/* EXCEL GRID */}
-        {/* FIX: Added `max-w-full w-full` to trap scrollbar */}
+        {/* The scrollbar is now perfectly trapped inside this div */}
         <div 
-          className="max-h-[400px] w-full max-w-full overflow-auto bg-white 
+          className="max-h-[400px] w-full overflow-x-auto overflow-y-auto bg-white 
             [&::-webkit-scrollbar]:w-2 
             [&::-webkit-scrollbar]:h-2.5 
             [&::-webkit-scrollbar-track]:bg-slate-50 
@@ -319,7 +356,12 @@ export default function ExcelReview({
                       className="min-w-[140px] max-w-[300px] border-b border-r border-slate-200 px-3 py-2 align-top text-slate-800"
                     >
                       <div className="min-h-[20px] whitespace-pre-wrap break-words">
-                        {getCellValue(cell)}
+                        <div>{getCellValue(cell)}</div>
+                        {getCellFormula(cell) && (
+                          <div className="mt-1 rounded bg-blue-50 px-2 py-1 font-mono text-[11px] text-blue-700 w-max max-w-full overflow-hidden text-ellipsis">
+                            Formula: {getCellFormula(cell)}
+                          </div>
+                        )}
                       </div>
                     </td>
                   ))}

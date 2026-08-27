@@ -71,6 +71,7 @@ export default function ExcelResult({ answer }: Props) {
 
           sheet.celldata.forEach((cell: any) => {
             if (cell && typeof cell.r === "number" && typeof cell.c === "number") {
+              // Properly maps the cell object so formulas are preserved
               rebuiltData[cell.r][cell.c] = cell.v;
             }
           });
@@ -92,11 +93,25 @@ export default function ExcelResult({ answer }: Props) {
     return null;
   }, [answer]);
 
+  // FIX: Attach live formulas to the XLSX export
   function fortuneSheetToAOA(data: any[][]) {
     return (data || []).map((row) =>
       (row || []).map((cell) => {
         if (cell === null || cell === undefined) return "";
-        if (typeof cell === "object") return cell.v ?? cell.m ?? "";
+        
+        if (typeof cell === "object") {
+          const formula = cell.f ?? cell.formula ?? cell.formulaText;
+          const value = cell.v ?? cell.m ?? "";
+          
+          if (formula) {
+            const cleanFormula = String(formula).startsWith("=") 
+              ? String(formula).substring(1) 
+              : String(formula);
+            return { f: cleanFormula, v: value };
+          }
+          return value;
+        }
+        
         return cell;
       })
     );
@@ -135,18 +150,22 @@ export default function ExcelResult({ answer }: Props) {
 
   const currentSheet = workbook?.sheets?.[activeSheet];
 
+  // FIX: Safely extract just the flat value so React doesn't crash
   function getCellValue(cell: any) {
     if (cell === null || cell === undefined) return "";
     if (typeof cell === "object") {
-      if ("v" in cell) return cell.v ?? "";
-      if ("m" in cell) return cell.m ?? "";
-      return "";
+      return cell.v ?? cell.m ?? "";
     }
     return String(cell);
   }
 
- return (
-    // FIX: Added `min-w-0 w-full` to prevent CSS Grid blowout
+  // FIX: New function to extract formulas
+  function getCellFormula(cell: any) {
+    if (!cell || typeof cell !== "object") return null;
+    return cell.f ?? cell.formula ?? cell.formulaText ?? null;
+  }
+
+  return (
     <div className="space-y-6 rounded-2xl bg-white p-8 shadow-sm min-w-0 w-full">
       <h2 className="text-2xl font-bold">{question?.question || "Excel Assessment"}</h2>
 
@@ -210,7 +229,6 @@ export default function ExcelResult({ answer }: Props) {
           </div>
 
           {/* EXCEL GRID */}
-          {/* FIX: Added `max-w-full` to force the scrollbar to stay inside this div */}
           <div 
             className="max-h-[400px] w-full max-w-full overflow-auto bg-white 
               [&::-webkit-scrollbar]:w-2 
@@ -232,8 +250,14 @@ export default function ExcelResult({ answer }: Props) {
                         key={columnIndex}
                         className="min-w-[140px] max-w-[300px] border-b border-r border-slate-200 px-3 py-2 align-top text-slate-800"
                       >
+                        {/* FIX: Render formulas if they exist */}
                         <div className="min-h-[20px] whitespace-pre-wrap break-words">
-                          {getCellValue(cell)}
+                          <div>{getCellValue(cell)}</div>
+                          {getCellFormula(cell) && (
+                            <div className="mt-1 rounded bg-blue-50 px-2 py-1 font-mono text-[11px] text-blue-700">
+                              Formula: {getCellFormula(cell)}
+                            </div>
+                          )}
                         </div>
                       </td>
                     ))}
